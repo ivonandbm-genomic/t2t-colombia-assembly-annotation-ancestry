@@ -336,6 +336,201 @@ def busco_plot(output, genome):
                 subprocess.run(command_2,check=True)
 #busco_plot(output,genome_t2t)
 
+
+
+# merqury + meryl
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import re
+import glob
+import shutil
+import subprocess as sp
+from pathlib import Path
+from typing import List
+
+# ──────────────────────────────────────────
+# CONFIG: ajusta sólo lo necesario
+# ──────────────────────────────────────────
+ROOT = Path("/mnt/diskrare/arlenb")
+INPUT_DIRS = [
+    ROOT / "04/scaffolds/t2t/03_1_C01_bc2059_017C_p_ctg",
+    ROOT / "04/scaffolds/t2t/03_1_D01_bc2060_018C_p_ctg",
+    ROOT / "04/scaffolds/hg38/03_1_C01_bc2059_017C_p_ctg",
+    ROOT / "04/scaffolds/hg38/03_1_D01_bc2060_018C_p_ctg",
+]
+DATA_ROOT = Path("/home/rare/ivon/data/merqury")
+
+# merqury + meryl
+MERQURY = Path(os.environ.get("MERQURY", "/home/rare/programs/merqury-1.3"))
+MERYL_BIN = shutil.which("meryl") or "/home/rare/programs/meryl-src/build/bin/meryl"
+SAMTOOLS = shutil.which("samtools") or "samtools"  # en PATH
+
+# Parámetros de cómputo (ajusta MEM_GB según tu RAM; tienes ~187 GB → 128–140 va bien)
+K = 21
+THREADS = 32
+MEM_GB = 128     # límite de RAM para meryl (GB aprox)
+DRY_RUN = False  # pon True si quieres ver comandos sin ejecutarlos
+
+# Lecturas por muestra: AJUSTA rutas/patrones si cambian
+READS_BY_SAMPLE = {
+    "017C": "/mnt/diskrare/arlenb/01/01_1_C01_bc2059_017C.fastq.gz",
+    "018C": "/mnt/diskrare/arlenb/01/01_1_D01_bc2060_018C.fastq.gz",
+}
+
+# ──────────────────────────────────────────
+# utilidades
+# ──────────────────────────────────────────
+def run(cmd: List[str], cwd: Path | None = None):
+    print("→", " ".join(map(str, cmd)), f"(cwd={cwd})" if cwd else "")
+    if DRY_RUN:
+        return
+    sp.run(cmd, check=True, cwd=cwd)
+
+def find_fasta(d: Path) -> Path | None:
+    cands = []
+    for pat in ("*.fa", "*.fasta", "*.fna", "*.fa.gz", "*.fasta.gz", "*.fna.gz"):
+        cands.extend(d.glob(pat))
+    pri = [x for x in cands if "p_ctg" in x.name]
+    if pri:
+        return pri[0]
+    return cands[0] if cands else None
+
+def sample_from_path(p: Path) -> str | None:
+    s = str(p)
+    if "017C" in s: return "017C"
+    if "018C" in s: return "018C"
+    m = re.search(r"(\d{3}C)", s)
+    return m.group(1) if m else None
+
+def context_from_path(p: Path) -> str:
+    s = str(p)
+    if "/t2t/" in s: return "t2t"
+    if "/hg38/" in s: return "hg38"
+    return "asm"
+
+def ensure_tools():
+    if not Path(MERYL_BIN).exists():
+        raise SystemExit(f"❌ No encuentro meryl en {MERYL_BIN} (agrega al PATH o ajusta MERYL_BIN)")
+    if not (MERQURY / "merqury.sh").exists():
+        raise SystemExit(f"❌ No encuentro merqury.sh en {MERQURY}")
+    if shutil.which(SAMTOOLS) is None and not shutil.which("samtools"):
+        raise SystemExit("❌ No encuentro samtools en el PATH (necesario para faidx)")
+    print(f"✓ meryl: {MERYL_BIN}")
+    print(f"✓ merqury.sh: {MERQURY / 'merqury.sh'}")
+    print(f"✓ samtools en PATH")
+
+def ensure_reads(sample: str) -> List[str]:
+    pattern = READS_BY_SAMPLE.get(sample)
+    if not pattern:
+        raise SystemExit(f"❌ No definiste patrón de lecturas para {sample} en READS_BY_SAMPLE")
+    hits = glob.glob(pattern)
+    if not hits:
+        raise SystemExit(f"❌ No encontré lecturas con patrón: {pattern}")
+    return hits
+
+def check_disk_space(path: Path, need_gb: int = 200):
+    try:
+        usage = shutil.disk_usage(path)
+        free_gb = usage.free / (1024**3)
+        if free_gb < need_gb:
+            print(f"⚠️  Espacio libre bajo en {path.resolve()}: {free_gb:.1f} GB (sug. ≥ {need_gb} GB)")
+    except Exception as e:
+        print(f"ℹ️  No pude medir espacio en {path}: {e}")
+
+def is_meryl_db_ok(db: Path) -> bool:
+    if not db.exists(): return False
+    expected = ["histogram", "info", "README"]
+    return any((db / x).exists() for x in expected)
+
+def ensure_faidx(fa: Path):
+    """Crea .fai si no existe."""
+    fai = Path(str(fa) + ".fai")
+    if not fai.exists():
+        run([SAMTOOLS, "faidx", str(fa)])
+
+# ──────────────────────────────────────────
+# pipeline por ensamblaje
+# ──────────────────────────────────────────
+def process_dir(d: Path):
+    asm = find_fasta(d)
+    if not asm:
+        print(f"⚠ No FASTA en {d}, salto.")
+        return
+
+    sample = sample_from_path(d)
+    ctx = context_from_path(d)
+    if not sample:
+        print(f"⚠ No pude deducir muestra (017C/018C) desde {d}, salto.")
+        return
+
+    reads = ensure_reads(sample)
+
+    # carpeta de trabajo por muestra/contexto
+    work = DATA_ROOT / "merqury" / f"{sample}_{ctx}"
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "logs").mkdir(exist_ok=True)
+    check_disk_space(work, need_gb=200)
+
+    # prefijo relativo (IMPORTANTÍSIMO para merqury.sh)
+    outprefix = f"{sample}__{ctx}"
+
+    # 1) meryl count (limita memoria y hilos)
+    meryl_db = work / f"{sample}.meryl"
+    if is_meryl_db_ok(meryl_db):
+        print(f"✓ meryl DB existe: {meryl_db}")
+    else:
+        if meryl_db.exists() and not DRY_RUN:
+            shutil.rmtree(meryl_db, ignore_errors=True)
+        cmd = [
+            MERYL_BIN, "count",
+            f"k={K}",
+            f"memory={MEM_GB}",
+            f"threads={THREADS}",
+            "output", str(meryl_db),
+        ] + reads
+        run(cmd, cwd=work)
+
+   # 2) Ensure assembly index (prevents .fasta.fai errors)
+ensure_faidx(asm)
+
+    # 3 Merqury (NO pasar -k ni -m aquí)
+    qv_file = work / f"{outprefix}.qv"
+    if qv_file.exists():
+        print(f"✓ QV ya generado: {qv_file}")
+    else:
+        cmd = [
+            str(MERQURY / "merqury.sh"),
+            "-t", str(THREADS),
+            str(meryl_db),
+            str(asm),
+            outprefix,
+        ]
+        run(cmd, cwd=work)
+
+
+# ──────────────────────────────────────────
+# main
+# ──────────────────────────────────────────
+def main():
+    ensure_tools()
+    print(f"Parámetros: k={K}, threads={THREADS}, mem≈{MEM_GB} GB")
+    for d in INPUT_DIRS:
+        print(f"\n=== Procesando {d} ===")
+        try:
+            process_dir(d)
+        except sp.CalledProcessError as e:
+            print(f"❌ Falló un comando en {d} (returncode={e.returncode}). Revisa logs en {DATA_ROOT}/merqury/*/logs/")
+        except SystemExit as e:
+            print(e)
+
+if __name__ == "__main__":
+    main()
+
+
+
+
 #Repeat annotation
 
 import os
