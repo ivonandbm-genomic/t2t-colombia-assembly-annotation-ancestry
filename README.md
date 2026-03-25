@@ -1,65 +1,90 @@
-High-quality HiFi de novo assembled and annotated diploid genomes from admixed Colombian individuals
-Overview
+#  High-quality HiFi de novo assembled and annotated diploid genomes from admixed Colombian individuals
+
+---
+
+## **Overview**
+
 This repository contains the complete bioinformatics workflow for:
 
-De novo genome assembly (PacBio HiFi)
-Genome annotation
-Small variant detection
-Global and local ancestry inference
+- **De novo genome assembly (PacBio HiFi)**
+- **Genome annotation**
+- **Small variant detection**
+- **Global and local ancestry inference**
+
 The analysis was performed on two admixed Colombian individuals from the Valle del Cauca region using long-read sequencing and telomere-to-telomere (T2T) references.
 
-Study Design
-Samples: 2 individuals (COLM, COLF)
-Technology: PacBio HiFi (CCS reads, Q20+)
-Coverage: ~30×
-Reference genomes:
-GRCh38
-T2T-CHM13 v2.2
-Data Availability
-Due to ethical and privacy constraints, raw genomic data (FASTQ, BAM, VCF) are not publicly available.
+---
+
+##  **Study Design**
+
+- **Samples:** 2 individuals (COLM, COLF)  
+- **Technology:** PacBio HiFi (CCS reads, Q20+)  
+- **Coverage:** ~30×  
+- **Reference genomes:**  
+  - GRCh38  
+  - T2T-CHM13 v2.2  
+
+---
+
+##  **Data Availability**
+
+Due to ethical and privacy constraints, raw genomic data (**FASTQ, BAM, VCF**) are not publicly available.
 
 This repository provides:
 
-✔️ Reproducible pipelines
-✔️ Scripts used in the analysis
-✔️ Summary results and figures
-Software Requirements
-samtools
-Jellyfish v2.3.1
-GenomeScope 2.0
-hifiasm v0.16.0
-gfatools
-RagTag v2.0.1
-QUAST v5.3.0
-BUSCO v5.8.1
-Merqury v1.3 + Meryl
-pbmm2
-DeepVariant v1.8.0
-bcftools
-WhatsHap v2.3
-PLINK v1.9
-ADMIXTURE v1.3
-RFMix v1.5.4
-RepeatMasker
-RepeatModeler
-Liftoff v1.6.3
-Pipeline Description
-1. Preprocessing and Genome Profiling
+- ✔️ Reproducible pipelines  
+- ✔️ Scripts used in the analysis  
+- ✔️ Summary results and figures  
+
+---
+
+##  **Software Requirements**
+
+- **samtools**
+- **Jellyfish v2.3.1**
+- **GenomeScope 2.0**
+- **hifiasm v0.16.0**
+- **gfatools**
+- **RagTag v2.0.1**
+- **QUAST v5.3.0**
+- **BUSCO v5.8.1**
+- **Merqury v1.3 + Meryl**
+- **pbmm2**
+- **DeepVariant v1.8.0**
+- **bcftools**
+- **WhatsHap v2.3**
+- **PLINK v1.9**
+- **ADMIXTURE v1.3**
+- **RFMix v1.5.4**
+- **RepeatMasker**
+- **RepeatModeler**
+- **Liftoff v1.6.3**
+
+---
+
+##  **Pipeline Description**
+
+###  **1. Preprocessing and Genome Profiling**
+
+
 Purpose:
 
 Estimate genome size
 Assess heterozygosity
 Evaluate repeat content
 
-2. Genome Assembly
-3. Assembly Quality Assessment
+###  **2. Genome Assembly**
+###  **3. Assembly Quality Assessment**
+
 QUAST → assembly statistics
 BUSCO → gene completeness
 Merqury → base-level accuracy (QV)
 
-4. Variant Calling
-5. Genome Annotation
-**6. Global and Local Ancestry Inference **
+
+###  **4. Variant Calling**
+###  **5. Genome Annotation**
+###  **6. Global and Local Ancestry Inference **
+
 The workflow integrates:
 
 Whole-genome sequencing (WGS) variant data
@@ -160,73 +185,77 @@ ADMIXTURE results (global ancestry proportions)
 Local ancestry tracts (RFMix)
 Per-chromosome ancestry summaries (bp and cM)
 
-References – Genome Assembly
-Cheng, H., Concepcion, G. T., Feng, X., Zhang, H., & Li, H. (2021).
-Haplotype-resolved de novo assembly using phased assembly graphs with hifiasm.
-Nature Methods, 18(2), 170–175.
-https://doi.org/10.1038/s41592-020-01056-5
+##  References – Genome Assembly
 
-Nurk, S., Koren, S., Rhie, A., Rautiainen, M., Bzikadze, A. V., Mikheenko, A.,
-Vollger, M. R., Altemose, N., Uralsky, L., Gershman, A., Aganezov, S.,
-Hoyt, S. J., Diekhans, M., Logsdon, G. A., Alonge, M., Antonarakis, S. E.,
-Borchers, M., Bouffard, G. G., Brooks, S. Y., … Phillippy, A. M. (2022).
-The complete sequence of a human genome.
-Science, 376(6588), 44–53.
-https://doi.org/10.1126/science.abj6987
+Cheng, H., Concepcion, G. T., Feng, X., Zhang, H., & Li, H. (2021).  
+Haplotype-resolved de novo assembly using phased assembly graphs with hifiasm.  
+Nature Methods, 18(2), 170–175.  
+https://doi.org/10.1038/s41592-020-01056-5  
 
-Li, H. (2018).
-Minimap2: Pairwise alignment for nucleotide sequences.
-Bioinformatics, 34(18), 3094–3100.
-https://doi.org/10.1093/bioinformatics/bty191
+Nurk, S., Koren, S., Rhie, A., Rautiainen, M., Bzikadze, A. V., Mikheenko, A.,  
+Vollger, M. R., Altemose, N., Uralsky, L., Gershman, A., Aganezov, S.,  
+Hoyt, S. J., Diekhans, M., Logsdon, G. A., Alonge, M., Antonarakis, S. E.,  
+Borchers, M., Bouffard, G. G., Brooks, S. Y., … Phillippy, A. M. (2022).  
+The complete sequence of a human genome.  
+Science, 376(6588), 44–53.  
+https://doi.org/10.1126/science.abj6987  
 
-Rhie, A., Walenz, B. P., Koren, S., & Phillippy, A. M. (2020).
-Merqury: Reference-free quality, completeness, and phasing assessment for genome assemblies.
-Genome Biology, 21, 245.
-https://doi.org/10.1186/s13059-020-02134-9
+Li, H. (2018).  
+Minimap2: Pairwise alignment for nucleotide sequences.  
+Bioinformatics, 34(18), 3094–3100.  
+https://doi.org/10.1093/bioinformatics/bty191  
 
-Gurevich, A., Saveliev, V., Vyahhi, N., & Tesler, G. (2013).
-QUAST: Quality assessment tool for genome assemblies.
-Bioinformatics, 29(8), 1072–1075.
-https://doi.org/10.1093/bioinformatics/btt086
+Rhie, A., Walenz, B. P., Koren, S., & Phillippy, A. M. (2020).  
+Merqury: Reference-free quality, completeness, and phasing assessment for genome assemblies.  
+Genome Biology, 21, 245.  
+https://doi.org/10.1186/s13059-020-02134-9  
 
-Simão, F. A., Waterhouse, R. M., Ioannidis, P., Kriventseva, E. V., & Zdobnov, E. M. (2015).
-BUSCO: Assessing genome assembly and annotation completeness with single-copy orthologs.
-Bioinformatics, 31(19), 3210–3212.
-https://doi.org/10.1093/bioinformatics/btv351
+Gurevich, A., Saveliev, V., Vyahhi, N., & Tesler, G. (2013).  
+QUAST: Quality assessment tool for genome assemblies.  
+Bioinformatics, 29(8), 1072–1075.  
+https://doi.org/10.1093/bioinformatics/btt086  
 
-References – Genome Profiling
-Marçais, G., & Kingsford, C. (2011).
-A fast, lock-free approach for efficient parallel counting of occurrences of k-mers.
-Bioinformatics, 27(6), 764–770.
-https://doi.org/10.1093/bioinformatics/btr011
+Simão, F. A., Waterhouse, R. M., Ioannidis, P., Kriventseva, E. V., & Zdobnov, E. M. (2015).  
+BUSCO: Assessing genome assembly and annotation completeness with single-copy orthologs.  
+Bioinformatics, 31(19), 3210–3212.  
+https://doi.org/10.1093/bioinformatics/btv351  
 
-Vurture, G. W., Sedlazeck, F. J., Nattestad, M., Underwood, C. J., Fang, H.,
-Gurtowski, J., & Schatz, M. C. (2017).
-GenomeScope: Fast reference-free genome profiling from short reads.
-Bioinformatics, 33(14), 2202–2204.
-https://doi.org/10.1093/bioinformatics/btx153
+##  References – Genome Profiling
 
-Ranallo-Benavidez, T. R., Jaron, K. S., & Schatz, M. C. (2020).
-GenomeScope 2.0 and Smudgeplot for reference-free profiling of polyploid genomes.
-Nature Communications, 11, 1432.
-https://doi.org/10.1038/s41467-020-14998-3
+Marçais, G., & Kingsford, C. (2011).  
+A fast, lock-free approach for efficient parallel counting of occurrences of k-mers.  
+Bioinformatics, 27(6), 764–770.  
+https://doi.org/10.1093/bioinformatics/btr011  
 
-References – Genome Annotation
-Shumate, A., & Salzberg, S. L. (2021).
-Liftoff: Accurate mapping of gene annotations.
-Bioinformatics, 37(12), 1639–1643.
-https://doi.org/10.1093/bioinformatics/btaa1016
+Vurture, G. W., Sedlazeck, F. J., Nattestad, M., Underwood, C. J., Fang, H.,  
+Gurtowski, J., & Schatz, M. C. (2017).  
+GenomeScope: Fast reference-free genome profiling from short reads.  
+Bioinformatics, 33(14), 2202–2204.  
+https://doi.org/10.1093/bioinformatics/btx153  
 
-Flynn, J. M., Hubley, R., Goubert, C., Rosen, J., Clark, A. G., Feschotte, C., & Smit, A. F. A. (2020).
-RepeatModeler2 for automated genomic discovery of transposable element families.
-Proceedings of the National Academy of Sciences, 117(17), 9451–9457.
-https://doi.org/10.1073/pnas.1921046117
+Ranallo-Benavidez, T. R., Jaron, K. S., & Schatz, M. C. (2020).  
+GenomeScope 2.0 and Smudgeplot for reference-free profiling of polyploid genomes.  
+Nature Communications, 11, 1432.  
+https://doi.org/10.1038/s41467-020-14998-3  
 
-Smit, A. F. A., Hubley, R., & Green, P. (2013–2015).
-RepeatMasker Open-4.0.
-http://www.repeatmasker.org
 
-References -Global and local Ancestry Inference
+##  References – Genome Annotation
+
+Shumate, A., & Salzberg, S. L. (2021).  
+Liftoff: Accurate mapping of gene annotations.  
+Bioinformatics, 37(12), 1639–1643.  
+https://doi.org/10.1093/bioinformatics/btaa1016  
+
+Flynn, J. M., Hubley, R., Goubert, C., Rosen, J., Clark, A. G., Feschotte, C., & Smit, A. F. A. (2020).  
+RepeatModeler2 for automated genomic discovery of transposable element families.  
+Proceedings of the National Academy of Sciences, 117(17), 9451–9457.  
+https://doi.org/10.1073/pnas.1921046117  
+
+Smit, A. F. A., Hubley, R., & Green, P. (2013–2015).  
+RepeatMasker Open-4.0.  
+http://www.repeatmasker.org  
+## References -Global and local Ancestry Inference
+
 The 1000 Genomes Project Consortium. (2015).
 A global reference for human genetic variation. Nature, 526(7571), 68–74.
 https://doi.org/10.1038/nature15393
@@ -247,3 +276,4 @@ Kosoy, R., Nassir, R., Tian, C., White, P. A., Butler, L. M., Silva, G., Kittles
 
 Phillips, C. (2014). Forensic genetic analysis of bio-geographical ancestry. Forensic Science International: Genetics, 12, 49–65.
 https://doi.org/10.1016/j.fsigen.2014.05.012
+
