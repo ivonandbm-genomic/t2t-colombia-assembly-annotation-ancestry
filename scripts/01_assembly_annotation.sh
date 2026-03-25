@@ -575,7 +575,7 @@ def filter_SVs(output, genome):
             print(f"Running: {command}")
             subprocess.run(command, shell=True, check=True)
 
-
+#filter_SVs(output,genome_t2t) PASS >50pb
 
 ##Small variants
 
@@ -670,12 +670,9 @@ def filter_SNVs(output, genome):
 #unified_SVs_call(output, reference_hg38, smrtlink, genome_hg38)
 #filter_SVs(output, genome_t2t)
 #filter_SVs(output, genome_hg38)
-#imprecise(output, genome_t2t)
-#imprecise(output, genome_hg38)
-#index_bam_aligned(output, genome_t2t)
-#index_bam_aligned(output, genome_hg38)
-#phased_vcf(output, reference_t2t, genome_t2t)
-#phased_vcf(output, reference_hg38, genome_hg38)
+
+
+
 #small_variants(output, reference_t2t,  genome_t2t)
 #small_variants(output, reference_hg38,  genome_hg38)
 #filter_SNVs(output, genome_t2t)
