@@ -1,5 +1,19 @@
-#1_Filtrar snps_ bialelicos_autosomas_pass_#
+#scripts/
+├── 01_filter_deepvariant_snps_autosomes.sh
+├── 02_phase_variants_whatshap.sh
+├── 03_split_phased_vcfs_by_chromosome.sh
+├── 04_build_gnomad_reference_panel.py
+├── 05_extract_reference_panel_vcfs.py
+├── 06_plink_merge_qc_ldpruning_for_pca_admixture.sh
+├── 07_run_pca.sh
+├── 08_run_admixture.py
+├── 09_plot_pca_admixture.py
+├── 10_rfmix_intersect_harmonize_merge_panel_query.sh
+├── 11_prepare_rfmix_inputs_query_ref_labels_maps.py
+├── 12_run_rfmix_all_samples.sh
+└── 13_plot_local_ancestry_rfmix.py#
 
+#1_Filtrar snps_ bialelicos_autosomas_pass_de los genomas#
 
 #!/usr/bin/env python3
 
@@ -73,381 +87,10 @@ for vcf in vcfs:
 
     # Paso 5: Indexar
     subprocess.run(["bcftools", "index", str(step4)], check=True)
-
-    
-
 print("\n🎉 Procesamiento completado para todos los VCFs.")
 
-
-
-
-#02_Fasear genomas  #
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import os
-import subprocess
-from pathlib import Path
-
-# ───────────────────────────────
-# CONFIGURACIÓN PARA TUS 18 GENOMAS
-# ───────────────────────────────
-VCF_DIR = Path("/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes")
-BAM_DIR = Path("/mnt/diskrare/arlenb/08/aligned_reads/hg38")
-OUT_DIR = Path("/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/18genfased")
-REF = "/mnt/diskrare/arlenb/reference/hg38.fasta"  # ruta que indicaste
-WHATSHAP = "/home/rare/.local/bin/whatshap"
-
-# Crear carpeta de salida
-OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# Log para problemas
-log = open("log_faseo_18.txt", "w")
-
-# Tus 18 muestras exactas (de tu ls)
-SAMPLES = [
-    "08_1_A01_bc2043_001P",
-    "08_1_A01_bc2044_002P",
-    "08_1_B01_bc2045_003P",
-    "08_1_C01_bc2046_004P",
-    "08_1_A01_bc2047_005P",
-    "08_1_B01_bc2048_006P",
-    "08_1_C01_bc2049_007P",
-    "08_1_C01_bc2050_008D",
-    "08_1_B01_bc2051_009D",
-    "08_1_D01_bc2052_010D",
-    "08_1_D01_bc2053_011D",
-    "08_1_D01_bc2054_012D",
-    "08_1_A01_bc2055_013A",
-    "08_1_A01_bc2056_014A",
-    "08_1_B01_bc2057_015A",
-    "08_1_B01_bc2058_016D",
-    "08_1_C01_bc2059_017C",
-    "08_1_D01_bc2060_018C"
-]
-
-print("Iniciando faseo de los 18 genomas con WhatsHap...\n")
-
-for sample in SAMPLES:
-    vcf_path = VCF_DIR / f"{sample}.autosomes.vcf.gz"
-    bam_path = BAM_DIR / f"{sample}.bam"
-    bai_path = BAM_DIR / f"{sample}.bam.bai"
-
-    print(f"🔄 Procesando: {sample}")
-
-    if not vcf_path.exists():
-        msg = f"❌ VCF faltante: {vcf_path}"
-        print(msg)
-        log.write(msg + "\n")
-        continue
-
-    if not bam_path.exists():
-        msg = f"❌ BAM faltante: {bam_path} (verifica si existe .bam.bai también)"
-        print(msg)
-        log.write(msg + "\n")
-        continue
-
-    if not bai_path.exists():
-        print("⚠️  No hay índice .bai → creando uno rápido...")
-        subprocess.run(["samtools", "index", str(bam_path)], check=True)
-
-    phased_vcf = OUT_DIR / f"{sample}.autosomes.phased.vcf.gz"
-
-    cmd = [
-        WHATSHAP, "phase",
-        "--reference", REF,
-        "--indels",
-        "--ignore-read-groups",
-        "-o", str(phased_vcf),
-        str(vcf_path),
-        str(bam_path)
-    ]
-
-    try:
-        subprocess.run(cmd, check=True)
-        print("   Faseo OK")
-
-        # Indexar
-        subprocess.run(["tabix", "-p", "vcf", str(phased_vcf)], check=True)
-
-        # Opcional: filtrar solo variantes completamente faseadas (ambos alelos con |)
-        final_vcf = OUT_DIR / f"{sample}.autosomes.fully_phased.vcf.gz"
-        subprocess.run([
-            "bcftools", "view",
-            "-i", 'GT~"|"',
-            "-Oz", "-o", str(final_vcf),
-            str(phased_vcf)
-        ], check=True)
-        subprocess.run(["tabix", "-p", "vcf", str(final_vcf)], check=True)
-
-        print(f"✅ Completado: {sample} → {final_vcf.name}\n")
-    except subprocess.CalledProcessError as e:
-        msg = f"❌ Error en {sample}: {e}"
-        print(msg)
-        log.write(msg + "\n")
-
-log.close()
-print("🎉 ¡Todo procesado!")
-print(f"VCFs faseados en: {OUT_DIR}")
-print("Revisa log_faseo_18.txt para cualquier problema.")
-_____________________
-
-
-#MERGED GENOME_018#
-#!/usr/bin/env python3
-import os
-import sys
-import shutil
-import subprocess
-from pathlib import Path
-
-BASE_018 = Path("/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/18genfased/018")
-OUTBASE = BASE_018 / "with_ref_panel1199"
-PANELDIR = Path("/mnt/diskrare/ivonb/refamerindios/panel_hgdp1kg_1200")
-
-CHRS = list(range(1, 23))
-
-def run(cmd, cwd=None):
-    """Run a shell command and raise if it fails."""
-    print("  $", " ".join(cmd))
-    subprocess.run(cmd, cwd=cwd, check=True)
-
-def capture(cmd, cwd=None) -> str:
-    """Run a shell command and capture stdout."""
-    return subprocess.check_output(cmd, cwd=cwd, text=True).strip()
-
-def count_sites_txt(path: Path) -> int:
-    return sum(1 for _ in path.open())
-
-def count_vcf_records(vcf_gz: Path) -> int:
-    out = capture(["bash", "-lc", f"bcftools view -H {vcf_gz} | wc -l"])
-    return int(out)
-
-def count_samples(vcf_gz: Path) -> int:
-    out = capture(["bash", "-lc", f"bcftools query -l {vcf_gz} | wc -l"])
-    return int(out)
-
-def main():
-    OUTBASE.mkdir(parents=True, exist_ok=True)
-
-    for chr_ in CHRS:
-        print(f"==================== chr{chr_} ====================")
-        odir = OUTBASE / f"isec_chr{chr_}"
-        odir.mkdir(parents=True, exist_ok=True)
-
-        panel = PANELDIR / f"hgdp1kgp_chr{chr_}.SNV_ONLY.BIAL.panel1199.vcf.gz"
-        query = BASE_018 / f"chr{chr_}.vcf.gz"
-
-        if not panel.exists() or panel.stat().st_size == 0:
-            print(f"🚩 No existe PANEL: {panel}", file=sys.stderr)
-            sys.exit(1)
-        if not query.exists() or query.stat().st_size == 0:
-            print(f"🚩 No existe QUERY: {query}", file=sys.stderr)
-            sys.exit(1)
-
-        # limpiar outputs viejos
-        to_remove = [
-            odir / f"chr{chr_}.018.common.vcf.gz",
-            odir / f"chr{chr_}.018.common.vcf.gz.tbi",
-            odir / f"chr{chr_}.panel1199.final.vcf.gz",
-            odir / f"chr{chr_}.panel1199.final.vcf.gz.tbi",
-            odir / f"chr{chr_}.panel1199_plus_018.common.merged.vcf.gz",
-            odir / f"chr{chr_}.panel1199_plus_018.common.merged.vcf.gz.tbi",
-            odir / "sites.pos",
-            odir / "sites018.4col.sorted",
-            odir / "panel.header.vcf",
-            odir / "panel.body.filtered",
-            odir / "0000.vcf.gz",
-            odir / "0000.vcf.gz.tbi",
-            odir / "0001.vcf.gz",
-            odir / "0001.vcf.gz.tbi",
-            odir / "README.txt",
-            odir / "sites.txt",
-        ]
-        for p in to_remove:
-            if p.exists():
-                if p.is_dir():
-                    shutil.rmtree(p)
-                else:
-                    p.unlink()
-
-        # 1) isec
-        run([
-            "bcftools", "isec", "-n=2", "-w1", "-O", "z",
-            "-p", str(odir),
-            str(panel), str(query)
-        ])
-
-        sites_txt = odir / "sites.txt"
-        if not sites_txt.exists() or sites_txt.stat().st_size == 0:
-            print("🚩 sites.txt no se generó", file=sys.stderr)
-            sys.exit(1)
-
-        nsites = count_sites_txt(sites_txt)
-        print(f"sites.txt: {nsites}")
-
-        # 2) filtrar 018 por POS
-        sites_pos = odir / "sites.pos"
-        run(["bash", "-lc", f"cut -f1,2 {sites_txt} > {sites_pos}"])
-
-        vcf_018_common = odir / f"chr{chr_}.018.common.vcf.gz"
-        run(["bcftools", "view", "-T", str(sites_pos), "-Oz", "-o", str(vcf_018_common), str(query)])
-        run(["tabix", "-f", "-p", "vcf", str(vcf_018_common)])
-
-        n018 = count_vcf_records(vcf_018_common)
-        print(f"018.common: {n018}")
-        if n018 != nsites:
-            print("🚩 018.common != sites.txt", file=sys.stderr)
-            sys.exit(1)
-
-        # 3) lista exacta 4col desde 018.common
-        sites018_4col = odir / "sites018.4col.sorted"
-        run(["bash", "-lc", f"bcftools query -f'%CHROM\\t%POS\\t%REF\\t%ALT\\n' {vcf_018_common} | sort -u > {sites018_4col}"])
-
-        # 4) construir panel final exacto por alelos (incluye FORMAT=GT)
-        panel_header = odir / "panel.header.vcf"
-        run(["bash", "-lc", f"bcftools view -h {panel} > {panel_header}"])
-
-        panel_body = odir / "panel.body.filtered"
-        # Nota: se añade 'GT' y luego [\t%GT] para mantener el número correcto de columnas
-        cmd = (
-            f"bcftools query -f'%CHROM\\t%POS\\t%REF\\t%ALT\\t%CHROM\\t%POS\\t%ID\\t%REF\\t%ALT\\t%QUAL\\t%FILTER\\t%INFO\\tGT[\\t%GT]\\n' {panel} | "
-            f"awk 'BEGIN{{FS=OFS=\"\\t\"}} "
-            f"NR==FNR {{ key[$1\"\\t\"$2\"\\t\"$3\"\\t\"$4]=1; next }} "
-            f"{{ k=$1\"\\t\"$2\"\\t\"$3\"\\t\"$4; if(k in key){{ "
-            f"for(i=5;i<=NF;i++) printf \"%s%s\", $i, (i==NF?ORS:OFS) "
-            f"}} }}' {sites018_4col} - > {panel_body}"
-        )
-        run(["bash", "-lc", cmd])
-
-        panel_final = odir / f"chr{chr_}.panel1199.final.vcf.gz"
-        run(["bash", "-lc", f"cat {panel_header} {panel_body} | bgzip -c > {panel_final}"])
-        run(["tabix", "-f", "-p", "vcf", str(panel_final)])
-
-        npanel = count_vcf_records(panel_final)
-        nsamp_panel = count_samples(panel_final)
-        print(f"panel.final: {npanel} | samples(panel)={nsamp_panel}")
-
-        if npanel != nsites:
-            print("🚩 panel.final != sites.txt", file=sys.stderr)
-            sys.exit(1)
-        if nsamp_panel != 1199:
-            print("🚩 panel.final samples != 1199", file=sys.stderr)
-            sys.exit(1)
-
-        # 5) merge (panel + 018)
-        merged = odir / f"chr{chr_}.panel1199_plus_018.common.merged.vcf.gz"
-        run([
-            "bcftools", "merge", "-m", "none", "-Oz",
-            "-o", str(merged),
-            str(panel_final),
-            str(vcf_018_common),
-        ])
-        run(["tabix", "-f", "-p", "vcf", str(merged)])
-
-        nmerged = count_vcf_records(merged)
-        nsamp_merged = count_samples(merged)
-        print(f"merged: {nmerged} | samples(merged)={nsamp_merged}")
-
-        if nmerged != nsites:
-            print("🚩 merged != sites.txt", file=sys.stderr)
-            sys.exit(1)
-        if nsamp_merged != 1200:
-            print("🚩 merged samples != 1200", file=sys.stderr)
-            sys.exit(1)
-
-        print(f"chr{chr_} ✅ OK")
-
-    # Resumen final
-    print("======== RESUMEN FINAL (018) ========")
-    for chr_ in CHRS:
-        dir_ = OUTBASE / f"isec_chr{chr_}"
-        if not dir_.exists():
-            print(f"chr{chr_} 🚩 faltante")
-            continue
-        sites_txt = dir_ / "sites.txt"
-        merged = dir_ / f"chr{chr_}.panel1199_plus_018.common.merged.vcf.gz"
-        nsites = count_sites_txt(sites_txt)
-        nmerged = count_vcf_records(merged) if merged.exists() else 0
-        print(f"chr{chr_} sites={nsites} merged={nmerged}")
-
-if __name__ == "__main__":
-    main()
-
-
-
-
-
-
-#SPLIT 18 GENOMAS FASEADOS POR CROMOSOMA#
-
-#!/bin/bash
-set -euo pipefail
-
-# Directorio con los fully_phased
-PHASED_DIR="18genfased"
-SPLIT_DIR="18gen_by_chr"
-
-mkdir -p $SPLIT_DIR
-cd $PHASED_DIR
-
-echo "Iniciando split por cromosoma de los 18 genomas..."
-
-# Mapeo: nombre largo → código corto (001 a 018)
-declare -A CODES
-CODES["08_1_A01_bc2043_001P"]=001
-CODES["08_1_A01_bc2044_002P"]=002
-CODES["08_1_B01_bc2045_003P"]=003
-CODES["08_1_C01_bc2046_004P"]=004
-CODES["08_1_A01_bc2047_005P"]=005
-CODES["08_1_B01_bc2048_006P"]=006
-CODES["08_1_C01_bc2049_007P"]=007
-CODES["08_1_C01_bc2050_008D"]=008
-CODES["08_1_B01_bc2051_009D"]=009
-CODES["08_1_D01_bc2052_010D"]=010
-CODES["08_1_D01_bc2053_011D"]=011
-CODES["08_1_D01_bc2054_012D"]=012
-CODES["08_1_A01_bc2055_013A"]=013
-CODES["08_1_A01_bc2056_014A"]=014
-CODES["08_1_B01_bc2057_015A"]=015
-CODES["08_1_B01_bc2058_016D"]=016
-CODES["08_1_C01_bc2059_017C"]=017
-CODES["08_1_D01_bc2060_018C"]=018
-
-for full_vcf in *.autosomes.fully_phased.vcf.gz; do
-    [[ -f "$full_vcf" ]] || continue
-    
-    base=${full_vcf%.autosomes.fully_phased.vcf.gz}
-    code=${CODES[$base]:-UNKNOWN}
-    
-    if [[ "$code" == "UNKNOWN" ]]; then
-        echo "Advertencia: No reconozco $base → salto"
-        continue
-    fi
-    
-    sample_dir="../$SPLIT_DIR/$code"
-    mkdir -p "$sample_dir"
-    
-    echo "Dividiendo genoma $code ($base)..."
-    
-    # Cromosomas 1-22
-    for chr in {1..22}; do
-        out="${sample_dir}/chr${chr}.vcf.gz"
-        bcftools view -Oz -o "$out" "$full_vcf" $chr && tabix -p vcf "$out" &
-    done
-    
-    # X e Y (si existen en el VCF, no falla si no)
-    bcftools view -Oz -o "${sample_dir}/chrX.vcf.gz" "$full_vcf" X 2>/dev/null && tabix -p vcf "${sample_dir}/chrX.vcf.gz" || true &
-    bcftools view -Oz -o "${sample_dir}/chrY.vcf.gz" "$full_vcf" Y 2>/dev/null && tabix -p vcf "${sample_dir}/chrY.vcf.gz" || true &
-    
-    wait  # espera que termine este genoma antes de pasar al siguiente
-    echo "Genoma $code dividido y indexado"
-done
-
-echo "¡Todos los 18 genomas divididos por cromosoma en $SPLIT_DIR!"
-________________________________
-
-#PANEL REFERENCIA PASO 1  GENERACION DE panel_5superpoblaciones.tsv#
+___________________________________________________________________________________________________________________
+#2_PANEL REFERENCIA PASO 1  GENERACION DE panel_5superpoblaciones.tsv#
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -871,6 +514,23 @@ if __name__ == "__main__":
     main()
 
 ______________________________________________________________________________
+______________________________________________________________________________
+#PLINK / PCA / ADMIXTURE
+panel + 18 genomas
+↓
+SNPs comunes
+↓
+merge PLINK
+↓
+QC
+↓
+MAF
+↓
+LD pruning
+↓
+PCA / ADMIXTURE#
+__________________________________________________________________________________________________________________#PLINK#
+
 #PLINK#
 
 #!/usr/bin/env bash
@@ -931,9 +591,144 @@ $PLINK \
   --extract merged_18_1200_common_qc05_maf05_nomind_ld.prune.in \
   --make-bed \
   --out merged_18_1200_common_qc05_maf05_nomind_pruned
-______________________________________________________
+___________________________________________________________________________________________________________#PCA#
+#PCA#
+#!/usr/bin/env bash
+set -euo pipefail
+
+PLINK="/home/rare/programs/Plink/plink"
+WORKDIR="/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/plink_individual"
+cd "$WORKDIR"
+
+echo "🔹 Ejecutando PCA"
+
+$PLINK \
+  --bfile merged_18_1200_common_qc05_maf05_nomind_pruned \
+  --pca 20 \
+  --out PCA_m05
+
+echo "✅ PCA listo"
 
 
+___________________________________________________________________________________________________________#PLOT_PCA#
+#PLOT_PCA#
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+# === 0) Rutas y Configuración ===
+BASE_DIR = "/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/plink_individual"
+OUT_DIR = Path("/home/rare/ivon/figpaper")
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+os.chdir(BASE_DIR)
+
+# === 1) Cargar eigenvec del PCA ===
+evec = pd.read_csv("PCA_m05.eigenvec", sep=r"\s+", header=None)
+evec.columns = ["FID", "IID"] + [f"PC{i}" for i in range(1, 21)]
+
+# === 2) Cargar mapa de superpoblaciones ===
+pop = pd.read_csv(
+    "/mnt/diskrare/ivonb/refamerindios/superpop_4groups.map",
+    sep=r"\s+",
+    header=None,
+    names=["IID", "POP"]
+)
+
+# Unir PCA + poblaciones
+df = evec.merge(pop, on="IID", how="left")
+df["POP"] = df["POP"].fillna("UNK")
+
+# === 3) Identificar muestras 017/018 ===
+mask_own = df["IID"].astype(str).str.startswith("PB000696_")
+df.loc[mask_own, "SHORT"] = (
+    df.loc[mask_own, "IID"].str.split("_").str[1].str[:3]
+)
+
+mask_label = (mask_own & df["SHORT"].isin(["017", "018"])) | df["IID"].astype(str).isin(["017", "018"])
+
+# === 4) Paleta Maestra Unificada ===
+color_map = {
+    "AMR": "#1F77B4",  # Azul
+    "EUR": "#FF7F0E",  # Naranja
+    "AFR": "#2CA02C",  # Verde
+    "EAS": "#D62728",  # Rojo
+    "SAS": "#9467BD",  # Púrpura
+    "UNK": "#D3D3D3",  # Gris
+}
+df["color"] = df["POP"].map(color_map).fillna("#D3D3D3")
+
+# === 5) Dibujar ===
+# Ajustamos el tamaño de la figura para que la resolución de 400 dpi sea efectiva
+fig, ax = plt.subplots(figsize=(10, 8))
+
+legend_pops = [p for p in ["AFR", "AMR", "EUR", "EAS", "SAS"] if p in set(df["POP"])]
+
+# Dibujar puntos de referencia
+for pop_label in legend_pops:
+    sub = df[df["POP"] == pop_label]
+    if not sub.empty:
+        ax.scatter(
+            sub["PC1"], sub["PC2"],
+            s=30, # Puntos ligeramente más grandes para 400 dpi
+            c=sub["color"],
+            label=pop_label,
+            alpha=0.7,
+            edgecolors='white',
+            linewidths=0.2
+        )
+
+# Dibujar UNK (referencia tenue)
+sub_unk = df[df["POP"] == "UNK"]
+if not sub_unk.empty:
+    ax.scatter(sub_unk["PC1"], sub_unk["PC2"], s=15, c="#D3D3D3", alpha=0.3, zorder=1)
+
+# Etiquetas para 017 y 018
+for _, row in df[mask_label].iterrows():
+    label_txt = row["SHORT"] if pd.notna(row.get("SHORT")) else str(row["IID"])
+    if label_txt.startswith("PB000696_"):
+        label_txt = label_txt.split("_")[1][:3]
+
+    ax.text(
+        row["PC1"], row["PC2"], label_txt,
+        fontsize=10, fontweight='bold',
+        ha="center", va="center",
+        bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1),
+        color="black", zorder=10
+    )
+
+# Ejes y Limpieza Estética
+ax.set_xlabel("PC1", fontsize=12, fontweight='bold')
+ax.set_ylabel("PC2", fontsize=12, fontweight='bold')
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+# Leyenda
+ax.legend(
+    title="Superpopulation",
+    title_fontsize=10,
+    fontsize=9,
+    bbox_to_anchor=(1.02, 0.5),
+    loc="center left",
+    frameon=False
+)
+
+plt.tight_layout()
+
+# === 6) Guardado a 400 DPI ===
+out_name = "PCA_PC1_PC2_400DPI_017_018"
+plt.savefig(OUT_DIR / f"{out_name}.png", dpi=400, bbox_inches="tight")
+plt.savefig(OUT_DIR / f"{out_name}.pdf", bbox_inches="tight")
+
+plt.close()
+
+print(f"✅ Archivos generados a 400 DPI en: {OUT_DIR}")
+________________________________________________________________________________________________________________________#ADMIXURE#
 # ADMIXURE#
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
@@ -1053,7 +848,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-___________________________________________________________________________
+__________________________________________________________________________________________________________#PLOT_ADMIXURE#
 
 
  #PLOT ADMIXURE#
@@ -1511,9 +1306,528 @@ def main():
 if __name__ == "__main__":
     main()
 
-_________________________________
+_________________________________________________________________________________________________________________________
+#RFMIX#
+_________________________________________________________________________________________________________________________
+VCFs faseados por cromosoma
+↓
+10_rfmix_intersect_harmonize_merge_panel_query.sh
+↓
+merged panel1199 + muestra
+↓
+11_prepare_rfmix_inputs_query_ref_labels_maps.py
+↓
+chrN.query.vcf.gz
+chrN.ref.vcf.gz
+chrN.superpopulation_labels.txt
+chrN.snp_locations
+↓
+12_run_rfmix_all_samples.sh
+
+___________________________________________________________________________________________________________________________#FASEO#
+
+#Fasear genomas  #
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import subprocess
+from pathlib import Path
+
+# ───────────────────────────────
+# CONFIGURACIÓN PARA TUS 18 GENOMAS
+# ───────────────────────────────
+VCF_DIR = Path("/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes")
+BAM_DIR = Path("/mnt/diskrare/arlenb/08/aligned_reads/hg38")
+OUT_DIR = Path("/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/18genfased")
+REF = "/mnt/diskrare/arlenb/reference/hg38.fasta"  # ruta que indicaste
+WHATSHAP = "/home/rare/.local/bin/whatshap"
+
+# Crear carpeta de salida
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Log para problemas
+log = open("log_faseo_18.txt", "w")
+
+# Tus 18 muestras exactas (de tu ls)
+SAMPLES = [
+    "08_1_A01_bc2043_001P",
+    "08_1_A01_bc2044_002P",
+    "08_1_B01_bc2045_003P",
+    "08_1_C01_bc2046_004P",
+    "08_1_A01_bc2047_005P",
+    "08_1_B01_bc2048_006P",
+    "08_1_C01_bc2049_007P",
+    "08_1_C01_bc2050_008D",
+    "08_1_B01_bc2051_009D",
+    "08_1_D01_bc2052_010D",
+    "08_1_D01_bc2053_011D",
+    "08_1_D01_bc2054_012D",
+    "08_1_A01_bc2055_013A",
+    "08_1_A01_bc2056_014A",
+    "08_1_B01_bc2057_015A",
+    "08_1_B01_bc2058_016D",
+    "08_1_C01_bc2059_017C",
+    "08_1_D01_bc2060_018C"
+]
+
+print("Iniciando faseo de los 18 genomas con WhatsHap...\n")
+
+for sample in SAMPLES:
+    vcf_path = VCF_DIR / f"{sample}.autosomes.vcf.gz"
+    bam_path = BAM_DIR / f"{sample}.bam"
+    bai_path = BAM_DIR / f"{sample}.bam.bai"
+
+    print(f"🔄 Procesando: {sample}")
+
+    if not vcf_path.exists():
+        msg = f"❌ VCF faltante: {vcf_path}"
+        print(msg)
+        log.write(msg + "\n")
+        continue
+
+    if not bam_path.exists():
+        msg = f"❌ BAM faltante: {bam_path} (verifica si existe .bam.bai también)"
+        print(msg)
+        log.write(msg + "\n")
+        continue
+
+    if not bai_path.exists():
+        print("⚠️  No hay índice .bai → creando uno rápido...")
+        subprocess.run(["samtools", "index", str(bam_path)], check=True)
+
+    phased_vcf = OUT_DIR / f"{sample}.autosomes.phased.vcf.gz"
+
+    cmd = [
+        WHATSHAP, "phase",
+        "--reference", REF,
+        "--indels",
+        "--ignore-read-groups",
+        "-o", str(phased_vcf),
+        str(vcf_path),
+        str(bam_path)
+    ]
+
+    try:
+        subprocess.run(cmd, check=True)
+        print("   Faseo OK")
+
+        # Indexar
+        subprocess.run(["tabix", "-p", "vcf", str(phased_vcf)], check=True)
+
+        # Opcional: filtrar solo variantes completamente faseadas (ambos alelos con |)
+        final_vcf = OUT_DIR / f"{sample}.autosomes.fully_phased.vcf.gz"
+        subprocess.run([
+            "bcftools", "view",
+            "-i", 'GT~"|"',
+            "-Oz", "-o", str(final_vcf),
+            str(phased_vcf)
+        ], check=True)
+        subprocess.run(["tabix", "-p", "vcf", str(final_vcf)], check=True)
+
+        print(f"✅ Completado: {sample} → {final_vcf.name}\n")
+    except subprocess.CalledProcessError as e:
+        msg = f"❌ Error en {sample}: {e}"
+        print(msg)
+        log.write(msg + "\n")
+
+log.close()
+print("🎉 ¡Todo procesado!")
+print(f"VCFs faseados en: {OUT_DIR}")
+print("Revisa log_faseo_18.txt para cualquier problema.")
+___________________________________________________________________________________________________________________________________#SPLIT#
+
+#SPLIT 18 GENOMAS FASEADOS POR CROMOSOMA#
+
+#!/bin/bash
+set -euo pipefail
+
+# Directorio con los fully_phased
+PHASED_DIR="18genfased"
+SPLIT_DIR="18gen_by_chr"
+
+mkdir -p $SPLIT_DIR
+cd $PHASED_DIR
+
+echo "Iniciando split por cromosoma de los 18 genomas..."
+
+# Mapeo: nombre largo → código corto (001 a 018)
+declare -A CODES
+CODES["08_1_A01_bc2043_001P"]=001
+CODES["08_1_A01_bc2044_002P"]=002
+CODES["08_1_B01_bc2045_003P"]=003
+CODES["08_1_C01_bc2046_004P"]=004
+CODES["08_1_A01_bc2047_005P"]=005
+CODES["08_1_B01_bc2048_006P"]=006
+CODES["08_1_C01_bc2049_007P"]=007
+CODES["08_1_C01_bc2050_008D"]=008
+CODES["08_1_B01_bc2051_009D"]=009
+CODES["08_1_D01_bc2052_010D"]=010
+CODES["08_1_D01_bc2053_011D"]=011
+CODES["08_1_D01_bc2054_012D"]=012
+CODES["08_1_A01_bc2055_013A"]=013
+CODES["08_1_A01_bc2056_014A"]=014
+CODES["08_1_B01_bc2057_015A"]=015
+CODES["08_1_B01_bc2058_016D"]=016
+CODES["08_1_C01_bc2059_017C"]=017
+CODES["08_1_D01_bc2060_018C"]=018
+
+for full_vcf in *.autosomes.fully_phased.vcf.gz; do
+    [[ -f "$full_vcf" ]] || continue
+    
+    base=${full_vcf%.autosomes.fully_phased.vcf.gz}
+    code=${CODES[$base]:-UNKNOWN}
+    
+    if [[ "$code" == "UNKNOWN" ]]; then
+        echo "Advertencia: No reconozco $base → salto"
+        continue
+    fi
+    
+    sample_dir="../$SPLIT_DIR/$code"
+    mkdir -p "$sample_dir"
+    
+    echo "Dividiendo genoma $code ($base)..."
+    
+    # Cromosomas 1-22
+    for chr in {1..22}; do
+        out="${sample_dir}/chr${chr}.vcf.gz"
+        bcftools view -Oz -o "$out" "$full_vcf" $chr && tabix -p vcf "$out" &
+    done
+    
+    # X e Y (si existen en el VCF, no falla si no)
+    bcftools view -Oz -o "${sample_dir}/chrX.vcf.gz" "$full_vcf" X 2>/dev/null && tabix -p vcf "${sample_dir}/chrX.vcf.gz" || true &
+    bcftools view -Oz -o "${sample_dir}/chrY.vcf.gz" "$full_vcf" Y 2>/dev/null && tabix -p vcf "${sample_dir}/chrY.vcf.gz" || true &
+    
+    wait  # espera que termine este genoma antes de pasar al siguiente
+    echo "Genoma $code dividido y indexado"
+done
+
+echo "¡Todos los 18 genomas divididos por cromosoma en $SPLIT_DIR!"
+___________________________________________________________________________________________________________________________________________________________#MERGED#
+#panel1199 chrN
++
+muestras chrN
+↓
+intersección de sitios comunes
+↓
+armonización exacta CHROM POS REF ALT
+↓
+panel final
+↓
+merge panel + muestra
+↓
+VCF merged con 1200 muestras#
+___________________________________________________________________________________________________________________________________________________________#MERGED 017#
+
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+# =========================
+# RUTAS PARA 017
+# =========================
+SAMPLE="017"
+
+BASE_SAMPLE="/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/18genfased/${SAMPLE}"
+OUTBASE="${BASE_SAMPLE}/merged"
+PANELDIR="/mnt/diskrare/ivonb/refamerindios/panel_hgdp1kg_1200"
+
+mkdir -p "$OUTBASE"
+
+for chr in {1..22}; do
+  echo "==================== ${SAMPLE} chr${chr} ===================="
+
+  odir="${OUTBASE}/isec_chr${chr}"
+  mkdir -p "$odir"
+  cd "$odir"
+
+  PANEL="${PANELDIR}/hgdp1kgp_chr${chr}.SNV_ONLY.BIAL.panel1199.vcf.gz"
+  QUERY="${BASE_SAMPLE}/chr${chr}.vcf.gz"
+
+  [[ -s "$PANEL" ]] || { echo "🚩 No existe PANEL: $PANEL"; exit 1; }
+  [[ -s "$QUERY" ]] || { echo "🚩 No existe QUERY: $QUERY"; exit 1; }
+
+  # Limpiar salidas previas
+  rm -f chr${chr}.${SAMPLE}.common.vcf.gz chr${chr}.${SAMPLE}.common.vcf.gz.tbi \
+        chr${chr}.panel1199.final.vcf.gz chr${chr}.panel1199.final.vcf.gz.tbi \
+        chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz \
+        chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz.tbi \
+        sites.pos sites${SAMPLE}.4col.sorted panel.header.vcf panel.body.filtered \
+        0000.vcf.gz 0000.vcf.gz.tbi 0001.vcf.gz 0001.vcf.gz.tbi README.txt sites.txt
+
+  # 1. Intersección panel + 017
+  bcftools isec -n=2 -w1 -O z -p "$odir" "$PANEL" "$QUERY"
+
+  [[ -s sites.txt ]] || { echo "🚩 sites.txt no se generó"; exit 1; }
+  nsites=$(wc -l < sites.txt)
+  echo "sites.txt: $nsites"
+
+  # 2. Filtrar 017 por posiciones comunes
+  cut -f1,2 sites.txt > sites.pos
+
+  bcftools view -T sites.pos -Oz \
+    -o chr${chr}.${SAMPLE}.common.vcf.gz \
+    "$QUERY"
+
+  tabix -f -p vcf chr${chr}.${SAMPLE}.common.vcf.gz
+
+  nquery=$(bcftools view -H chr${chr}.${SAMPLE}.common.vcf.gz | wc -l)
+  echo "${SAMPLE}.common: $nquery"
+
+  [[ "$nquery" -eq "$nsites" ]] || { echo "🚩 ${SAMPLE}.common != sites.txt"; exit 1; }
+
+  # 3. Extraer sitios exactos CHROM POS REF ALT desde 017
+  bcftools query -f'%CHROM\t%POS\t%REF\t%ALT\n' chr${chr}.${SAMPLE}.common.vcf.gz \
+    | sort -u > sites${SAMPLE}.4col.sorted
+
+  # 4. Construir panel final con coincidencia exacta de alelos
+  bcftools view -h "$PANEL" > panel.header.vcf
+
+  bcftools query -f'%CHROM\t%POS\t%REF\t%ALT\t%CHROM\t%POS\t%ID\t%REF\t%ALT\t%QUAL\t%FILTER\t%INFO\tGT[\t%GT]\n' "$PANEL" \
+  | awk 'BEGIN{FS=OFS="\t"}
+      NR==FNR { key[$1"\t"$2"\t"$3"\t"$4]=1; next }
+      {
+        k=$1"\t"$2"\t"$3"\t"$4
+        if(k in key){
+          for(i=5;i<=NF;i++) printf "%s%s", $i, (i==NF?ORS:OFS)
+        }
+      }' sites${SAMPLE}.4col.sorted - \
+  > panel.body.filtered
+
+  cat panel.header.vcf panel.body.filtered | bgzip -c > chr${chr}.panel1199.final.vcf.gz
+  tabix -f -p vcf chr${chr}.panel1199.final.vcf.gz
+
+  npanel=$(bcftools view -H chr${chr}.panel1199.final.vcf.gz | wc -l)
+  nsamp_panel=$(bcftools query -l chr${chr}.panel1199.final.vcf.gz | wc -l)
+
+  echo "panel.final: $npanel | samples(panel)=$nsamp_panel"
+
+  [[ "$npanel" -eq "$nsites" ]] || { echo "🚩 panel.final != sites.txt"; exit 1; }
+  [[ "$nsamp_panel" -eq 1199 ]] || { echo "🚩 panel.final samples != 1199"; exit 1; }
+
+  # 5. Merge panel + 017
+  bcftools merge -m none -Oz \
+    -o chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz \
+    chr${chr}.panel1199.final.vcf.gz \
+    chr${chr}.${SAMPLE}.common.vcf.gz
+
+  tabix -f -p vcf chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz
+
+  nmerged=$(bcftools view -H chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz | wc -l)
+  nsamp_merged=$(bcftools query -l chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz | wc -l)
+
+  echo "merged: $nmerged | samples(merged)=$nsamp_merged"
+
+  [[ "$nmerged" -eq "$nsites" ]] || { echo "🚩 merged != sites.txt"; exit 1; }
+  [[ "$nsamp_merged" -eq 1200 ]] || { echo "🚩 merged samples != 1200"; exit 1; }
+
+  echo "chr${chr} ✅ OK"
+done
+
+echo "======== RESUMEN FINAL ${SAMPLE} ========"
+
+for chr in {1..22}; do
+  dir="${OUTBASE}/isec_chr${chr}"
+  nsites=$(wc -l < "${dir}/sites.txt" 2>/dev/null || echo 0)
+  nmerged=$(bcftools view -H "${dir}/chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz" 2>/dev/null | wc -l)
+  echo "chr${chr} sites=${nsites} merged=${nmerged}"
+done
+
+
+
+
+
+___________________________________________________________________________________________________________________________________________________________#MERGED 018#
+
+
+#MERGED GENOME_018#
+#!/usr/bin/env python3
+import os
+import sys
+import shutil
+import subprocess
+from pathlib import Path
+
+BASE_018 = Path("/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/18genfased/018")
+OUTBASE = BASE_018 / "with_ref_panel1199"
+PANELDIR = Path("/mnt/diskrare/ivonb/refamerindios/panel_hgdp1kg_1200")
+
+CHRS = list(range(1, 23))
+
+def run(cmd, cwd=None):
+    """Run a shell command and raise if it fails."""
+    print("  $", " ".join(cmd))
+    subprocess.run(cmd, cwd=cwd, check=True)
+
+def capture(cmd, cwd=None) -> str:
+    """Run a shell command and capture stdout."""
+    return subprocess.check_output(cmd, cwd=cwd, text=True).strip()
+
+def count_sites_txt(path: Path) -> int:
+    return sum(1 for _ in path.open())
+
+def count_vcf_records(vcf_gz: Path) -> int:
+    out = capture(["bash", "-lc", f"bcftools view -H {vcf_gz} | wc -l"])
+    return int(out)
+
+def count_samples(vcf_gz: Path) -> int:
+    out = capture(["bash", "-lc", f"bcftools query -l {vcf_gz} | wc -l"])
+    return int(out)
+
+def main():
+    OUTBASE.mkdir(parents=True, exist_ok=True)
+
+    for chr_ in CHRS:
+        print(f"==================== chr{chr_} ====================")
+        odir = OUTBASE / f"isec_chr{chr_}"
+        odir.mkdir(parents=True, exist_ok=True)
+
+        panel = PANELDIR / f"hgdp1kgp_chr{chr_}.SNV_ONLY.BIAL.panel1199.vcf.gz"
+        query = BASE_018 / f"chr{chr_}.vcf.gz"
+
+        if not panel.exists() or panel.stat().st_size == 0:
+            print(f"🚩 No existe PANEL: {panel}", file=sys.stderr)
+            sys.exit(1)
+        if not query.exists() or query.stat().st_size == 0:
+            print(f"🚩 No existe QUERY: {query}", file=sys.stderr)
+            sys.exit(1)
+
+        # limpiar outputs viejos
+        to_remove = [
+            odir / f"chr{chr_}.018.common.vcf.gz",
+            odir / f"chr{chr_}.018.common.vcf.gz.tbi",
+            odir / f"chr{chr_}.panel1199.final.vcf.gz",
+            odir / f"chr{chr_}.panel1199.final.vcf.gz.tbi",
+            odir / f"chr{chr_}.panel1199_plus_018.common.merged.vcf.gz",
+            odir / f"chr{chr_}.panel1199_plus_018.common.merged.vcf.gz.tbi",
+            odir / "sites.pos",
+            odir / "sites018.4col.sorted",
+            odir / "panel.header.vcf",
+            odir / "panel.body.filtered",
+            odir / "0000.vcf.gz",
+            odir / "0000.vcf.gz.tbi",
+            odir / "0001.vcf.gz",
+            odir / "0001.vcf.gz.tbi",
+            odir / "README.txt",
+            odir / "sites.txt",
+        ]
+        for p in to_remove:
+            if p.exists():
+                if p.is_dir():
+                    shutil.rmtree(p)
+                else:
+                    p.unlink()
+
+        # 1) isec
+        run([
+            "bcftools", "isec", "-n=2", "-w1", "-O", "z",
+            "-p", str(odir),
+            str(panel), str(query)
+        ])
+
+        sites_txt = odir / "sites.txt"
+        if not sites_txt.exists() or sites_txt.stat().st_size == 0:
+            print("🚩 sites.txt no se generó", file=sys.stderr)
+            sys.exit(1)
+
+        nsites = count_sites_txt(sites_txt)
+        print(f"sites.txt: {nsites}")
+
+        # 2) filtrar 018 por POS
+        sites_pos = odir / "sites.pos"
+        run(["bash", "-lc", f"cut -f1,2 {sites_txt} > {sites_pos}"])
+
+        vcf_018_common = odir / f"chr{chr_}.018.common.vcf.gz"
+        run(["bcftools", "view", "-T", str(sites_pos), "-Oz", "-o", str(vcf_018_common), str(query)])
+        run(["tabix", "-f", "-p", "vcf", str(vcf_018_common)])
+
+        n018 = count_vcf_records(vcf_018_common)
+        print(f"018.common: {n018}")
+        if n018 != nsites:
+            print("🚩 018.common != sites.txt", file=sys.stderr)
+            sys.exit(1)
+
+        # 3) lista exacta 4col desde 018.common
+        sites018_4col = odir / "sites018.4col.sorted"
+        run(["bash", "-lc", f"bcftools query -f'%CHROM\\t%POS\\t%REF\\t%ALT\\n' {vcf_018_common} | sort -u > {sites018_4col}"])
+
+        # 4) construir panel final exacto por alelos (incluye FORMAT=GT)
+        panel_header = odir / "panel.header.vcf"
+        run(["bash", "-lc", f"bcftools view -h {panel} > {panel_header}"])
+
+        panel_body = odir / "panel.body.filtered"
+        # Nota: se añade 'GT' y luego [\t%GT] para mantener el número correcto de columnas
+        cmd = (
+            f"bcftools query -f'%CHROM\\t%POS\\t%REF\\t%ALT\\t%CHROM\\t%POS\\t%ID\\t%REF\\t%ALT\\t%QUAL\\t%FILTER\\t%INFO\\tGT[\\t%GT]\\n' {panel} | "
+            f"awk 'BEGIN{{FS=OFS=\"\\t\"}} "
+            f"NR==FNR {{ key[$1\"\\t\"$2\"\\t\"$3\"\\t\"$4]=1; next }} "
+            f"{{ k=$1\"\\t\"$2\"\\t\"$3\"\\t\"$4; if(k in key){{ "
+            f"for(i=5;i<=NF;i++) printf \"%s%s\", $i, (i==NF?ORS:OFS) "
+            f"}} }}' {sites018_4col} - > {panel_body}"
+        )
+        run(["bash", "-lc", cmd])
+
+        panel_final = odir / f"chr{chr_}.panel1199.final.vcf.gz"
+        run(["bash", "-lc", f"cat {panel_header} {panel_body} | bgzip -c > {panel_final}"])
+        run(["tabix", "-f", "-p", "vcf", str(panel_final)])
+
+        npanel = count_vcf_records(panel_final)
+        nsamp_panel = count_samples(panel_final)
+        print(f"panel.final: {npanel} | samples(panel)={nsamp_panel}")
+
+        if npanel != nsites:
+            print("🚩 panel.final != sites.txt", file=sys.stderr)
+            sys.exit(1)
+        if nsamp_panel != 1199:
+            print("🚩 panel.final samples != 1199", file=sys.stderr)
+            sys.exit(1)
+
+        # 5) merge (panel + 018)
+        merged = odir / f"chr{chr_}.panel1199_plus_018.common.merged.vcf.gz"
+        run([
+            "bcftools", "merge", "-m", "none", "-Oz",
+            "-o", str(merged),
+            str(panel_final),
+            str(vcf_018_common),
+        ])
+        run(["tabix", "-f", "-p", "vcf", str(merged)])
+
+        nmerged = count_vcf_records(merged)
+        nsamp_merged = count_samples(merged)
+        print(f"merged: {nmerged} | samples(merged)={nsamp_merged}")
+
+        if nmerged != nsites:
+            print("🚩 merged != sites.txt", file=sys.stderr)
+            sys.exit(1)
+        if nsamp_merged != 1200:
+            print("🚩 merged samples != 1200", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"chr{chr_} ✅ OK")
+
+    # Resumen final
+    print("======== RESUMEN FINAL (018) ========")
+    for chr_ in CHRS:
+        dir_ = OUTBASE / f"isec_chr{chr_}"
+        if not dir_.exists():
+            print(f"chr{chr_} 🚩 faltante")
+            continue
+        sites_txt = dir_ / "sites.txt"
+        merged = dir_ / f"chr{chr_}.panel1199_plus_018.common.merged.vcf.gz"
+        nsites = count_sites_txt(sites_txt)
+        nmerged = count_vcf_records(merged) if merged.exists() else 0
+        print(f"chr{chr_} sites={nsites} merged={nmerged}")
+
+if __name__ == "__main__":
+    main()
+
+
+
+__________________________________________________________________________________________________________________________________#ARCHIVOS_RFMIX#
 #PREPARACIÓN ARCHIVOS RFMIX#
-______________________________
+
+
+_________________________________________________________________________________________________________________________________#018#
 #.query_ref_localitation_018# 
 
 #!/usr/bin/env python3
@@ -1701,8 +2015,8 @@ if __name__ == "__main__":
     main()
 
 
-----------------------------
 
+_____________________________________________________________________________________________________________________________________________________#017#
 #query_ref_locations_017#
 
 #!/usr/bin/env python3
@@ -1819,10 +2133,7 @@ if __name__ == "__main__":
     main()
 
 
-
-
-
-__________________________________________________
+_______________________________________________________________________________________________________________________________#RUN_RFMIX#
 # RFMIX#
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1874,11 +2185,10 @@ for CHR in {1..22}; do
       -o "${OUT_018}/rfmix_chr${CHR}_output" \
       --n-threads="$THREADS"
 done
-# #
 
 
 
-
+______________________________________________________________________________________________________________________________#PLOTS_RFMIX#
 
 
 #PLOTS#
@@ -2027,13 +2337,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-# #
-# #
-# #
-# #
-# #
-# #
-# #
+
 
 
 
