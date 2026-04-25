@@ -126,6 +126,11 @@ The AMR panel includes:
 1000 Genomes populations (PEL, MXL, CLM, PUR)
 Indigenous American populations (HGDP: Maya, Pima, Karitiana, Suruí, Colombians)
 
+
+### PLINK processing for PCA and ADMIXTURE
+
+The filtered autosomal SNP datasets from the gnomAD HGDP+1KG reference panel and the 18 Colombian genomes were converted to PLINK format. Variant IDs were harmonized, common SNPs were retained, and both datasets were merged. The merged dataset contained 1,218 individuals, including 1,200 reference samples and 18 Colombian genomes. Quality control was performed using genotype missingness filtering, MAF filtering, and LD pruning before PCA and ADMIXTURE analyses.
+
 Data HarmonizationIntersection of SNPs between target genomes and reference panel
 Strict allele matching
 Chromosome-wise processing
@@ -135,6 +140,7 @@ Performed using PLINK:
 plink --indep-pairwise 50 10 0.2
 Result:
 ~70,000–90,000 independent SNPs
+
 
 Principal Component Analysis (PCA)
 Performed on LD-pruned dataset
