@@ -61,6 +61,62 @@ This repository provides:
 - **Liftoff v1.6.3**
 
 ---
+## Repository Structure
+
+```text
+scripts/
+├── 01_assembly_annotation.sh
+├── 02_Ancestry.sh
+└── README.md
+```
+
+---
+
+## Pipeline Organization
+
+The repository is organized into two main modular pipelines:
+
+### 1. Assembly and Annotation Pipeline
+
+Implemented as a single modular script containing the following analytical sections:
+
+1. BAM preprocessing
+2. FASTQ extraction
+3. k-mer profiling using Jellyfish and GenomeScope
+4. De novo assembly using hifiasm
+5. GFA-to-FASTA conversion
+6. HiFi read alignment
+7. RagTag correction
+8. RagTag scaffolding
+9. Assembly quality assessment
+10. BUSCO completeness analysis
+11. Merqury consensus quality evaluation
+12. Repeat annotation using RepeatMasker and RepeatModeler
+13. Gene annotation transfer using Liftoff
+14. Chromosome-level FASTA processing
+15. Structural variant detection using pbsv
+
+Each module is internally documented and can be executed independently depending on the analysis stage.
+
+---
+
+### 2. Variant, Population Structure, and Local Ancestry Pipeline
+
+Implemented as a single modular script containing the following analytical sections:
+
+1. Variant filtering and preprocessing
+2. Reference panel construction and harmonization
+3. PLINK harmonization and quality control
+4. Principal component analysis (PCA)
+5. Global ancestry inference using ADMIXTURE
+6. Variant phasing using WhatsHap
+7. Chromosome-wise VCF splitting
+8. Preparation of RFMix reference and query files
+9. Local ancestry inference using RFMix
+10. Population structure visualization
+11. Local ancestry plotting
+
+Each section is internally documented and can be executed independently depending on the analysis stage.
 
 ##  **Pipeline Description**
 
