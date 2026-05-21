@@ -207,13 +207,7 @@ The workflow integrates:
   - EUR
   - EAS
 
-#### Software Requirements
 
-- PLINK v1.9
-- ADMIXTURE v1.3
-- bcftools
-- RFMix v1.5.4
-- WhatsHap v2.3
 
 ---
 
