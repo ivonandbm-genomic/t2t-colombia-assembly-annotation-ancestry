@@ -14,15 +14,23 @@ This repository contains the complete bioinformatics workflow for:
 The analysis was performed on two admixed Colombian individuals from the Valle del Cauca region using long-read sequencing and telomere-to-telomere (T2T) references.
 
 ---
+## Study Design
 
-##  **Study Design**
+To simplify figure labeling and downstream analyses, the following sample aliases were used throughout the repository and manuscript:
 
-- **Samples:** 2 individuals (COLM, COLF)  
-- **Technology:** PacBio HiFi (CCS reads, Q20+)  
-- **Coverage:** ~30×  
-- **Reference genomes:**  
-  - GRCh38  
-  - T2T-CHM13 v2.2  
+| Original sample ID | Alias |
+|---|---|
+| 017 / 017C | COLM |
+| 018 / 018C | COLF |
+
+These aliases are consistently used in figures, population structure analyses, local ancestry plots, and manuscript visualizations.
+
+- **Samples:** 2 individuals (COLM and COLF)
+- **Technology:** PacBio HiFi (CCS reads, Q20+)
+- **Coverage:** ~30×
+- **Reference genomes:**
+  - GRCh38
+  - T2T-CHM13 v2.2
 
 ---
 
