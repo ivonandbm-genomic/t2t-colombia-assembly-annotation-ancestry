@@ -126,135 +126,254 @@ Implemented as a single modular script containing the following analytical secti
 
 Each section is internally documented and can be executed independently depending on the analysis stage.
 
-##  **Pipeline Description**
+## Pipeline Description
 
-###  **1. Preprocessing and Genome Profiling**
-
+### 1. Preprocessing and Genome Profiling
 
 Purpose:
 
-Estimate genome size
-Assess heterozygosity
-Evaluate repeat content
+- Estimate genome size
+- Assess heterozygosity
+- Evaluate repeat content
 
-###  **2. Genome Assembly**
-###  **3. Assembly Quality Assessment**
+Main analyses:
 
-QUAST → assembly statistics
-BUSCO → gene completeness
+- BAM preprocessing
+- FASTQ extraction
+- k-mer counting using Jellyfish
+- GenomeScope profiling
+
+---
+
+### 2. Genome Assembly
+
+Main analyses:
+
+- HiFi assembly using hifiasm
+- GFA-to-FASTA conversion
+- Assembly correction
+- Chromosome scaffolding
+
+---
+
+### 3. Assembly Quality Assessment
+
+QUAST → assembly statistics  
+BUSCO → gene completeness  
 Merqury → base-level accuracy (QV)
 
+---
 
-###  **4. Variant Calling**
-###  **5. Genome Annotation**
-###  **6. Global and Local Ancestry Inference **
+### 4. Variant Calling
+
+Main analyses:
+
+- Small variant calling using DeepVariant
+- Structural variant calling using pbsv
+- Variant filtering and normalization
+- PASS filtering and quality control
+
+---
+
+### 5. Genome Annotation
+
+Main analyses:
+
+- Repeat annotation using RepeatMasker and RepeatModeler
+- Gene annotation transfer using Liftoff
+- Chromosome-level annotation processing
+
+---
+
+### 6. Global and Local Ancestry Inference
 
 The workflow integrates:
 
-Whole-genome sequencing (WGS) variant data
-A harmonized global reference panel (HGDP + 1000 Genomes)
-Population structure analysis (PCA)
-Global ancestry estimation (ADMIXTURE)
-Local ancestry inference (RFMix)
-Integration with structural variation and T2T genome coordinates
+- Whole-genome sequencing (WGS) variant data
+- A harmonized global reference panel (HGDP + 1000 Genomes)
+- Population structure analysis (PCA)
+- Global ancestry estimation (ADMIXTURE)
+- Local ancestry inference (RFMix)
+- Integration with structural variation and T2T genome coordinates
 
-Input Data
-Phased VCF files (biallelic SNPs, autosomes)
-Reference panel: gnomAD HGDP + 1000 Genomes (v3)
-Genetic maps (1000 Genomes Project)
-Population labels (AFR, AMR, EUR, EAS)
+#### Input Data
 
-Software Requirements
-PLINK v1.9
-ADMIXTURE v1.3
-bcftools
-RFMix v1.5.4
-WhatsHap v2.3
+- Phased VCF files (biallelic SNPs, autosomes)
+- Reference panel: gnomAD HGDP + 1000 Genomes (v3)
+- Genetic maps (1000 Genomes Project)
+- Population labels:
+  - AFR
+  - AMR
+  - EUR
+  - EAS
 
-Pipeline Description
+#### Software Requirements
 
-Variant Filtering
-Retain autosomal variants (chr1–22)
-Filter:
-PASS variants only
-Biallelic SNPs
-MAF ≥ 0.05
-Missingness ≤ 5%
-Reference Panel Construction
+- PLINK v1.9
+- ADMIXTURE v1.3
+- bcftools
+- RFMix v1.5.4
+- WhatsHap v2.3
+
+---
+
+### Variant Filtering
+
+Retained variants:
+
+- Autosomal variants (chr1–22)
+- PASS variants only
+- Biallelic SNPs
+- MAF ≥ 0.05
+- Missingness ≤ 5%
+
+---
+
+### Reference Panel Construction
+
 A balanced reference panel was constructed using 1,200 unrelated individuals from HGDP + 1000 Genomes:
-AFR (n = 300)
-AMR (n = 300)
-EUR (n = 300)
-EAS (n = 300)
+
+- AFR (n = 300)
+- AMR (n = 300)
+- EUR (n = 300)
+- EAS (n = 300)
+
 The AMR panel includes:
-1000 Genomes populations (PEL, MXL, CLM, PUR)
-Indigenous American populations (HGDP: Maya, Pima, Karitiana, Suruí, Colombians)
 
+#### 1000 Genomes populations
 
-### PLINK processing for PCA and ADMIXTURE
+- PEL
+- MXL
+- CLM
+- PUR
 
-The filtered autosomal SNP datasets from the gnomAD HGDP+1KG reference panel and the 18 Colombian genomes were converted to PLINK format. Variant IDs were harmonized, common SNPs were retained, and both datasets were merged. The merged dataset contained 1,218 individuals, including 1,200 reference samples and 18 Colombian genomes. Quality control was performed using genotype missingness filtering, MAF filtering, and LD pruning before PCA and ADMIXTURE analyses.
+#### Indigenous American populations (HGDP)
 
-Data HarmonizationIntersection of SNPs between target genomes and reference panel
-Strict allele matching
-Chromosome-wise processing
+- Maya
+- Pima
+- Karitiana
+- Suruí
+- Colombians
 
-LD Pruning
+---
+
+### PLINK Processing for PCA and ADMIXTURE
+
+The filtered autosomal SNP datasets from the gnomAD HGDP+1KG reference panel and the 18 Colombian genomes were converted to PLINK format.
+
+Variant IDs were harmonized, common SNPs were retained, and both datasets were merged.
+
+The merged dataset contained 1,218 individuals, including:
+
+- 1,200 reference samples
+- 18 Colombian genomes
+
+Quality control was performed using:
+
+- Genotype missingness filtering
+- MAF filtering
+- LD pruning
+
+#### Data Harmonization
+
+- Intersection of SNPs between target genomes and reference panel
+- Strict allele matching
+- Chromosome-wise processing
+
+---
+
+### LD Pruning
+
 Performed using PLINK:
+
+```bash
 plink --indep-pairwise 50 10 0.2
+```
+
 Result:
-~70,000–90,000 independent SNPs
 
+- ~70,000–90,000 independent SNPs
 
-Principal Component Analysis (PCA)
-Performed on LD-pruned dataset
-First 20 PCs retained
-Used for visualization of population structure
+---
 
-Global Ancestry Inference (ADMIXTURE)
-ADMIXTURE run for K = 2–6
-3 independent runs per K
-Cross-validation used to determine optimal K
+### Principal Component Analysis (PCA)
 
-Output:
-Ancestry proportions per individual
-Population structure plots
+Performed on the LD-pruned dataset.
 
-Local Ancestry Inference (RFMix)
-Software: RFMix v1.5.4
-Mode: PopPhased
-Phase correction: enabled
-Parameters:
-Generations since admixture: 8
-Trees per window: 100
-Window size: 0.2 cM
-Seed: 12345
-Input:
-Phased VCFs (autosomal SNPs)
-Reference haplotypes (HGDP + 1000 Genomes)
-Processing:
-Chromosome-wise analysis
-Harmonization of SNP positions and alleles
-Final dataset: 1,199 reference samples + 1 target genome per run
+Main analyses:
 
-Output:
-Local ancestry tracts (cM resolution)
-Per-chromosome ancestry assignments
+- Population structure visualization
+- First 20 PCs retained
 
-Ancestry Informative Markers (AIMs)
-SNPs were selected based on allele frequency differences:
-ΔAF ≥ 0.60
-MAF ≥ 0.05 in at least one population
+---
 
-Used to:
-Identify ancestry-informative regions
-Support interpretation of local ancestry
-Output Files
-PCA plots (population structure)
-ADMIXTURE results (global ancestry proportions)
-Local ancestry tracts (RFMix)
-Per-chromosome ancestry summaries (bp and cM)
+### Global Ancestry Inference (ADMIXTURE)
 
+ADMIXTURE was run for K = 2–6.
+
+Main analyses:
+
+- Three independent runs per K
+- Cross-validation used to determine optimal K
+- Estimation of ancestry proportions
+
+#### Output
+
+- Ancestry proportions per individual
+- Population structure plots
+
+---
+
+### Local Ancestry Inference (RFMix)
+
+Software:
+
+- RFMix v1.5.4
+
+Mode:
+
+- PopPhased
+
+Phase correction:
+
+- Enabled
+
+#### Parameters
+
+- Generations since admixture: 8
+- Trees per window: 100
+- Window size: 0.2 cM
+- Seed: 12345
+
+#### Input
+
+- Phased VCFs (autosomal SNPs)
+- Reference haplotypes (HGDP + 1000 Genomes)
+
+#### Processing
+
+- Chromosome-wise analysis
+- Harmonization of SNP positions and alleles
+
+Final dataset:
+
+- 1,199 reference samples
+- 1 target genome per run
+
+#### Output
+
+- Local ancestry tracts (cM resolution)
+- Per-chromosome ancestry assignments
+---
+
+### Output Files
+
+- PCA plots (population structure)
+- ADMIXTURE results (global ancestry proportions)
+- Local ancestry tracts (RFMix)
+- Per-chromosome ancestry summaries (bp and cM)
+
+- 
 ##  References – Genome Assembly
 
 Cheng, H., Concepcion, G. T., Feng, X., Zhang, H., & Li, H. (2021).  
