@@ -831,48 +831,6 @@ def filter_SNVs(output, genome):
 
 
 
-#Genome Assembly
-#index_bamfiles(folder_genomes, smrtlink)
-#convert_bam_fastq(folder_genomes, output, smrtlink)
-#hifi_assembly(output, mnt_diskrare)
-##convert_gfa_to_fasta( output)
-#correct_assembly(reference_t2t, output, genome_t2t)
-#correct_assembly(reference_hg38, output, genome_hg38)
-#change_name(output, genome_t2t)
-#change_name(output, genome_hg38)
-#scaffold_and_rename(reference_t2t, output, genome_t2t)
-#change_name_scaffold(output, genome_t2t)
-#rename_folder(output, genome_t2t)
-#alignment_before_polishing(output,  mnt_diskrare, genome_t2t)
-#convert_bam_sam(output,mnt_diskrare,  genome_t2t)
-#run_alignment_and_lrscaf(output, mnt_diskrare, genome_t2t)
-#run_alignment_and_lrscaf(output, mnt_diskrare, genome_hg38)
-#quast_contig(reference_t2t, output)
-#quast(reference_t2t, output, genome_t2t)
-#quast_hg38(reference_hg38, output, genome_hg38)
-#busco(output)
-
-
-
-#Variant calling
-#aligment (folder_genomes, reference_t2t, output, smrtlink, genome_t2t)
-#aligment (folder_genomes, reference_hg38, output, smrtlink, genome_hg38)
-#discover_signatures(output, smrtlink,genome_t2t, folder_reference)
-#discover_signatures(output, smrtlink, genome_hg38, folder_reference)
-#structural_variants_call(output, reference_t2t, smrtlink,genome_t2t)
-#structural_variants_call(output, reference_hg38, smrtlink, genome_hg38)
-#unified_SVs_call(output, reference_t2t, smrtlink, genome_t2t)
-#unified_SVs_call(output, reference_hg38, smrtlink, genome_hg38)
-#filter_SVs(output, genome_t2t)
-#filter_SVs(output, genome_hg38)
-
-
-
-#small_variants(output, reference_t2t,  genome_t2t)
-#small_variants(output, reference_hg38,  genome_hg38)
-#filter_SNVs(output, genome_t2t)
-#filter_SNVs(output, genome_hg38)
-
 
 
 
