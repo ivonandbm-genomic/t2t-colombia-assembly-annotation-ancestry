@@ -30,7 +30,7 @@ These aliases are consistently used in figures, population structure analyses, l
 - **Coverage:** ~30×
 - **Reference genomes:**
   - GRCh38
-  - T2T-CHM13 v2.2
+  - T2T-CHM13 v2.0
 
 ---
 
