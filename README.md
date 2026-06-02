@@ -67,6 +67,7 @@ This repository provides:
 - **RepeatMasker**
 - **RepeatModeler**
 - **Liftoff v1.6.3**
+- 
 
 ---
 ## Repository Structure
@@ -101,8 +102,8 @@ Implemented as a single modular script containing the following analytical secti
 11. Merqury consensus quality evaluation
 12. Repeat annotation using RepeatMasker and RepeatModeler
 13. Gene annotation transfer using Liftoff
-14. Chromosome-level FASTA processing
-15. Structural variant detection using pbsv
+14. Structural variant detection using pbsv
+15. Small variant calling using Deepvariant
 
 Each module is internally documented and can be executed independently depending on the analysis stage.
 
@@ -126,66 +127,222 @@ Implemented as a single modular script containing the following analytical secti
 
 Each section is internally documented and can be executed independently depending on the analysis stage.
 
-## Pipeline Description
+## Pipeline Description 
 
-### 1. Preprocessing and Genome Profiling
+
+### 1. Read Processing
+
+Input:
+
+* PacBio HiFi BAM files
+
+Steps:
+
+* BAM indexing (pbindex)
+* BAM to FASTQ conversion (bam2fastq)
+
+Output:
+
+* FASTQ files
+
+---
+
+### 2. Genome Profiling
+
+Tools:
+
+* Jellyfish
+* GenomeScope
 
 Purpose:
 
-- Estimate genome size
-- Assess heterozygosity
-- Evaluate repeat content
+* Estimate genome size
+* Estimate heterozygosity
+* Estimate repeat content
 
-Main analyses:
+Output:
 
-- BAM preprocessing
-- FASTQ extraction
-- k-mer counting using Jellyfish
-- GenomeScope profiling
+* K-mer histograms
+* GenomeScope reports
 
 ---
 
-### 2. Genome Assembly
+### 3. De Novo Genome Assembly
 
-Main analyses:
+Tool:
 
-- HiFi assembly using hifiasm
-- GFA-to-FASTA conversion
-- Assembly correction
-- Chromosome scaffolding
+* Hifiasm
 
----
+Input:
 
-### 3. Assembly Quality Assessment
+* PacBio HiFi FASTQ files
 
-QUAST → assembly statistics  
-BUSCO → gene completeness  
-Merqury → base-level accuracy (QV)
+Output:
 
----
-
-### 4. Variant Calling
-
-Main analyses:
-
-- Small variant calling using DeepVariant
-- Structural variant calling using pbsv
-- Variant filtering and normalization
-- PASS filtering and quality control
+* Primary contigs
+* Haplotype-resolved assemblies
+* GFA files
 
 ---
 
-### 5. Genome Annotation
+### 4. Conversion of Assemblies
 
-Main analyses:
+Tool:
 
-- Repeat annotation using RepeatMasker and RepeatModeler
-- Gene annotation transfer using Liftoff
-- Chromosome-level annotation processing
+* Gfatools
+
+Purpose:
+
+* Convert GFA assemblies to FASTA format
+
+Output:
+
+* Contig FASTA files
 
 ---
 
-### 6. Global and Local Ancestry Inference
+### 5. Assembly Refinement
+
+Tool:
+
+* RagTag
+
+Functions:
+
+* Structural correction
+* Reference-guided scaffolding
+
+References:
+
+* T2T-CHM13 v2.0
+* GRCh38
+
+Output:
+
+* Chromosome-scale scaffold assemblies
+
+---
+
+### 6. Assembly Quality Assessment
+
+Tools:
+
+#### QUAST
+
+Evaluates:
+
+* N50
+* Assembly size
+* Misassemblies
+* Genome coverage
+
+#### BUSCO
+
+Evaluates:
+
+* Conserved ortholog completeness
+
+Database:
+
+* primates_odb12
+
+#### Merqury
+
+Evaluates:
+
+* Consensus quality value (QV)
+* Assembly completeness
+
+---
+
+### 7. Repeat Annotation
+
+Tool:
+
+* RepeatMasker
+
+Features:
+
+* LINEs
+* SINEs
+* LTR elements
+* DNA transposons
+* Simple repeats
+
+Output:
+
+* GFF annotations
+* Repeat statistics
+
+---
+
+### 8. Gene Annotation
+
+Tool:
+
+* Liftoff
+
+Reference Annotation:
+
+* T2T-CHM13 gene models
+
+Output:
+
+* GTF annotations
+* Lifted genes
+* Unmapped genes
+
+---
+
+### 9. Structural Variant Discovery
+
+Tools:
+
+* pbmm2
+* pbsv
+
+Workflow:
+
+1. Read alignment
+2. Signature discovery
+3. Variant calling
+4. Filtering
+
+Detected Variant Types:
+
+* DEL
+* INS
+* DUP
+* INV
+
+Output:
+
+* Structural variant VCF files
+
+---
+
+### 10. Small Variant Calling
+
+Tool:
+
+* DeepVariant
+
+Model:
+
+* PACBIO
+
+Detected Variants:
+
+* SNPs
+* Indels
+
+Output:
+
+* VCF
+* gVCF
+
+
+###  11. Global and Local Ancestry Inference
 
 The workflow integrates:
 
