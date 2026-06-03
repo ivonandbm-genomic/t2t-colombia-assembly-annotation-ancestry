@@ -57,7 +57,13 @@ This repository provides:
 - **QUAST v5.3.0**
 - **BUSCO v5.8.1**
 - **Merqury v1.3 + Meryl**
-- **pbmm2**
+- **SURVIVOR**
+-  **pbsv**
+- **Sniffles2**
+- **NanoVar**
+- **cuteSV**
+- **SVIM-asm**
+- **Sawfish**
 - **DeepVariant v1.8.0**
 - **bcftools**
 - **WhatsHap v2.3**
@@ -67,6 +73,7 @@ This repository provides:
 - **RepeatMasker**
 - **RepeatModeler**
 - **Liftoff v1.6.3**
+  
 - 
 
 ---
@@ -298,28 +305,35 @@ Output:
 
 Tools:
 
-* pbmm2
-* pbsv
+- pbsv
+- Sniffles2
+- NanoVar
+- cuteSV
+- SVIM-asm
+- Sawfish
 
 Workflow:
 
-1. Read alignment
-2. Signature discovery
-3. Variant calling
-4. Filtering
+1. Collect SV calls from individual callers.
+2. Convert compressed VCFs to standard VCF format.
+3. Generate SURVIVOR input files.
+4. Merge SV calls across callers.
+5. Retain variants supported by at least two methods.
+6. Filter final calls according to:
 
-Detected Variant Types:
 
-* DEL
-* INS
-* DUP
-* INV
+## Output
 
-Output:
+Merged SV VCFs:
 
-* Structural variant VCF files
+```text
+SVs_merge_4/
+```
 
----
+Filtered consensus SV VCFs:
+
+```text
+SVs_merge_4/filtered/
 
 ### 10. Small Variant Calling
 
@@ -357,7 +371,7 @@ The workflow integrates:
 
 - Phased VCF files (biallelic SNPs, autosomes)
 - Reference panel: gnomAD HGDP + 1000 Genomes (v3)
-- Genetic maps (1000 Genomes Project)
+- Genetic maps 
 - Population labels:
   - AFR
   - AMR
@@ -410,14 +424,10 @@ The AMR panel includes:
 
 ### PLINK Processing for PCA and ADMIXTURE
 
-The filtered autosomal SNP datasets from the gnomAD HGDP+1KG reference panel and the 18 Colombian genomes were converted to PLINK format.
+The filtered autosomal SNP datasets from the gnomAD HGDP+1KG reference panel and the  Colombian genomes were converted to PLINK format.
 
 Variant IDs were harmonized, common SNPs were retained, and both datasets were merged.
 
-The merged dataset contained 1,218 individuals, including:
-
-- 1,200 reference samples
-- 18 Colombian genomes
 
 Quality control was performed using:
 
@@ -440,12 +450,6 @@ Performed using PLINK:
 ```bash
 plink --indep-pairwise 50 10 0.2
 ```
-
-Result:
-
-- ~70,000–90,000 independent SNPs
-
----
 
 ### Principal Component Analysis (PCA)
 
