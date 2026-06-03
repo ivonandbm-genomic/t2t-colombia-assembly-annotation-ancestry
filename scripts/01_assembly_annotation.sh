@@ -681,96 +681,143 @@ def gene_annotation(mnt_diskrare, reference_t2t, output, genome_t2t, genes_t2t):
 
 
 #Structural Variant Calling using T2T and hg38 as references
+import os, subprocess
 
-def aligment(folder_genomes, reference, output, smrtlink, genome):
-    out=f"{output}/08/aligned_reads/{genome}"
-    if not os.path.exists(out):
-        os.makedirs(out)
-    for x in os.listdir(folder_genomes):
-        if x.endswith(".bam"):
-            file = os.path.join(folder_genomes, x)
-            basename = os.path.splitext(x)[0]
-            output_file = f"{out}/08_{basename}_aligned.bam"
-            if not os.path.exists(output_file):
-                command = (
-                    f"{smrtlink}/pbmm2 align {reference} {file} "
-                    f"--sort --preset HIFI --log-level INFO -j 32 > {output_file}"
-                )
-                subprocess.run(command, shell=True, check=True)
-            else:
-                print(f"Skipping alignment for {x} as {output_file} already exists.")
-#aligment(folder_genomes, reference_17C, output, smrtlink, genome_017C)
-#aligment(folder_genomes, reference_18C, output, smrtlink, genome_018C)
+import os, subprocess
+from pathlib import Path
 
-def discover_signatures(output, mnt_diskrare, smrtlink, genome):
-    aligned_reads = f"{mnt_diskrare}/08/aligned_reads/{genome}"
-    out = f"{output}/08/structural_variants/signatures/{genome}"
+pbsv     = "/home/rare/arlen/outputs/Structural_variants/08/structural_variants/vcfs_filtered/t2t"
+nanovar  = "/home/rare/arlen/outputs/Structural_variants/nanovar/t2t"
+sniffles = "/home/rare/arlen/outputs/Structural_variants/sniffles"
+cuteSV   = "/home/rare/arlen/outputs/Structural_variants/cuteSV"
+svim_asm = "/home/rare/arlen/outputs/Structural_variants/svim_asm"
+sawfish_sv_dir = "/home/rare/arlen/outputs/Structural_variants/sawfish/SV_only"
 
-    os.makedirs(out, exist_ok=True)
+output   = "/home/rare/arlen/outputs/Structural_variants"
+survivor = "/home/rare/programs/SURVIVOR/Debug/SURVIVOR"
 
-    for x in os.listdir(aligned_reads):
-        if x.endswith(".bam"):
-            file = os.path.join(aligned_reads, x)
-            basename = "_".join(x.split("_")[0:5])
-            out_file = f"{out}/{basename}.svsig.gz"
+import os
+import subprocess
+from pathlib import Path
 
-            if os.path.exists(out_file):
-                print(f"Skipping {basename}, signature already exists.")
+def _ensure_plain_vcf(vcf_path: str, plain_dir: str) -> str:
+    """
+    Convert .vcf.gz -> .vcf (plain text) into plain_dir using bcftools.
+    Return a path to a plain .vcf suitable for SURVIVOR.
+    """
+    vcf_path = Path(vcf_path)
+    plain_dir = Path(plain_dir)
+    plain_dir.mkdir(parents=True, exist_ok=True)
+
+    if str(vcf_path).endswith(".vcf.gz"):
+        out_vcf = plain_dir / vcf_path.name.replace(".vcf.gz", ".vcf")
+        cmd = ["bcftools", "view", "-Ov", str(vcf_path), "-o", str(out_vcf)]
+        subprocess.run(cmd, check=True)
+        return str(out_vcf)
+
+    # already .vcf
+    return str(vcf_path)
+
+
+def generate_sample_files(pbsv, nanovar, sniffles, cuteSV, svim_asm, sawfish_sv_dir, output):
+    out = Path(output) / "sample_files"
+    out.mkdir(parents=True, exist_ok=True)
+
+    # staging area for uncompressed VCFs (SURVIVOR-friendly)
+    plain_root = out / "_plain_vcfs"
+    plain_root.mkdir(parents=True, exist_ok=True)
+
+    for root, dirs, files in os.walk(nanovar):
+        for x in files:
+            if not x.endswith(".nanovar.pass.vcf"):
                 continue
 
-            command = (
-                f"{smrtlink}/pbsv discover {file} {out_file} "
-                f"--tandem-repeats /home/rare/arlen/reference/human_T2T_CHM13v2.trf.bed"
+            nanovar_file = os.path.join(root, x)
+            basename = os.path.basename(nanovar_file).replace(".nanovar.pass.vcf", "")
+
+            basename_pb_sn = basename.replace("01_1_", "08_1_")
+            basename_svim  = basename.replace("01_1_", "03_1_")
+
+            pbsv_file     = os.path.join(pbsv,     f"{basename_pb_sn}.vcf")
+            sniffles_file = os.path.join(sniffles, f"{basename_pb_sn}.vcf")
+            cuteSV_file   = os.path.join(cuteSV,   basename_pb_sn, f"{basename_pb_sn}.vcf")
+            svim_asm_file = os.path.join(svim_asm, basename_svim, "variants.vcf")
+            #dipcall_file  = os.path.join(dipcall, f"{basename}.dip.vcf").replace("01_1", "03_1_")
+
+            # ---- Sawfish SV-only (your exact naming) ----
+            sawfish_file = os.path.join(
+                sawfish_sv_dir,
+                f"sawfish_{basename_pb_sn}.SV_only.vcf.gz"
             )
-            print(f"Running: {command}")
-            subprocess.run(command, shell=True, check=True)
-#discover_signatures(output, mnt_diskrare, smrtlink, genome_t2t)
 
+            vcfs = [
+                pbsv_file,
+                nanovar_file,
+                sniffles_file,
+                cuteSV_file,
+                svim_asm_file,
+                #dipcall_file,
+                sawfish_file,
+            ]
 
-def structural_variants_call(output, reference, smrtlink, genome):
-    signatures = f"{output}/08/structural_variants/signatures/{genome}"
-    out = f"{output}/08/structural_variants/vcfs/{genome}"
-
-    os.makedirs(out, exist_ok=True)
-
-    for x in os.listdir(signatures):
-        if x.endswith(".bam.svsig.gz"):
-            file = os.path.join(signatures, x)
-            basename = os.path.basename(file).replace(".bam.svsig.gz", "")
-            out_file = f"{out}/{basename}.vcf"
-
-            if os.path.exists(out_file):
-                print(f"Skipping {basename}, VCF already exists.")
+            # keep only existing files (don’t fail if a caller is missing)
+            existing = [v for v in vcfs if os.path.exists(v)]
+            if len(existing) < 2:
+                print(f"[SKIP] {basename}: only {len(existing)} VCFs found")
                 continue
 
-            command = f"{smrtlink}/pbsv call {reference} {file} {out_file}"
-            print(f"Running: {command}")
-            subprocess.run(command, shell=True, check=True)
-            
-#structural_variants_call(output, reference_t2t, smrtlink, genome_t2t)
+            # ensure plain VCFs for SURVIVOR
+            plain_dir = plain_root / basename
+            existing_plain = [_ensure_plain_vcf(v, str(plain_dir)) for v in existing]
 
-def filter_SVs(output, genome):
-    SVs_folder = f"{output}/08/structural_variants/vcfs/{genome}"
-    out = f"{output}/08/structural_variants/vcfs_filtered/{genome}"
+            # write sample list (one VCF path per line)
+            list_file = out / f"{basename}.txt"
+            with open(list_file, "w") as fh:
+                fh.write("\n".join(existing_plain) + "\n")
 
+            print(f"[OK] {basename}: wrote {list_file} ({len(existing_plain)} callers)")
+
+#generate_sample_files(pbsv, nanovar, sniffles, cuteSV, svim_asm, sawfish_sv_dir, output)
+
+samples_folder="/home/rare/arlen/outputs/Structural_variants/sample_files"
+def run_survivor(samples_folder, output,survivor):
+    out=f"{output}/SVs_merge_4" 
+    os.makedirs(out, exist_ok=True)
+    for x in os.listdir(samples_folder):
+        if x.endswith(".txt"):
+            file=os.path.join(samples_folder,x)
+            basename=os.path.basename(file).replace(".txt", "")
+            cmd=f"{survivor} merge {file} 1000 2 1 1 0 50 {out}/{basename}.vcf"
+            subprocess.run(cmd, check=True, shell=True)
+
+run_survivor(samples_folder, output, survivor)          
+
+
+
+SVs_merge="/home/rare/arlen/outputs/Structural_variants/SVs_merge_4"    
+
+def filter_sv(SVs_merge: str, min_len: int = 50):
+    out = os.path.join(SVs_merge, "filtered")
     os.makedirs(out, exist_ok=True)
 
-    for x in os.listdir(SVs_folder):
-        if x.endswith("vcf"):
-            file = os.path.join(SVs_folder, x)
-            basename = os.path.basename(file).replace(".vcf", "")
-            filtered_file = f"{out}/{basename}.vcf"
+    expr = (
+        f'(INFO/SVTYPE="DEL" || INFO/SVTYPE="DUP" || INFO/SVTYPE="INS" || '
+        f'INFO/SVTYPE="INV" || INFO/SVTYPE="BND") && abs(INFO/SVLEN) >= {min_len}'
+    )
 
-            if os.path.exists(filtered_file):
-                print(f"Skipping {basename}, filtered VCF already exists.")
-                continue
+    for x in os.listdir(SVs_merge):
+        if not x.endswith(".vcf"):
+            continue
 
-            program = "../programs/svpack/svpack"
-            command = f"{program} filter --pass-only --min-svlen 50 {file} > {filtered_file}"
-            print(f"Running: {command}")
-            subprocess.run(command, shell=True, check=True)
+        file = os.path.join(SVs_merge, x)
+        basename = os.path.splitext(x)[0]
+        out_vcf = os.path.join(out, f"{basename}.vcf")
 
-#filter_SVs(output,genome_t2t) PASS >50pb
+        cmd = ["bcftools", "view", "-i", expr, "-Ov", file, "-o", out_vcf]
+        subprocess.run(cmd, check=True)
+
+# Example call
+filter_sv(SVs_merge)
 
 ##Small variants
 
