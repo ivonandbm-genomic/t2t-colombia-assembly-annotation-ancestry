@@ -228,7 +228,7 @@ Output:
 
 * Chromosome-scale scaffold assemblies
 
----
+--
 
 ### 6. Assembly Quality Assessment
 
