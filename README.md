@@ -8,7 +8,7 @@ This repository contains the complete bioinformatics workflow for:
 
 - **De novo genome assembly (PacBio HiFi)**
 - **Genome annotation**
-- **Small variant detection**
+- **Variant detection**
 - **Global and local ancestry inference**
 
 The analysis was performed on two admixed Colombian individuals from the Valle del Cauca region using long-read sequencing and telomere-to-telomere (T2T) references.
