@@ -326,13 +326,13 @@ Workflow:
 
 Merged SV VCFs:
 
-```text
+
 SVs_merge_4/
-```
+
 
 Filtered consensus SV VCFs:
 
-```text
+
 SVs_merge_4/filtered/
 
 ### 10. Small Variant Calling
@@ -447,9 +447,9 @@ Quality control was performed using:
 
 Performed using PLINK:
 
-```bash
+
 plink --indep-pairwise 50 10 0.2
-```
+
 
 ### Principal Component Analysis (PCA)
 
@@ -462,71 +462,6 @@ Main analyses:
 
 ---
 
-### Global Ancestry Inference (ADMIXTURE)
-
-ADMIXTURE was run for K = 2–6.
-
-Main analyses:
-
-- Three independent runs per K
-- Cross-validation used to determine optimal K
-- Estimation of ancestry proportions
-
-#### Output
-
-- Ancestry proportions per individual
-- Population structure plots
-
----
-
-### Local Ancestry Inference (RFMix)
-
-Software:
-
-- RFMix v1.5.4
-
-Mode:
-
-- PopPhased
-
-Phase correction:
-
-- Enabled
-
-#### Parameters
-
-- Generations since admixture: 8
-- Trees per window: 100
-- Window size: 0.2 cM
-- Seed: 12345
-
-#### Input
-
-- Phased VCFs (autosomal SNPs)
-- Reference haplotypes (HGDP + 1000 Genomes)
-
-#### Processing
-
-- Chromosome-wise analysis
-- Harmonization of SNP positions and alleles
-
-Final dataset:
-
-- 1,199 reference samples
-- 1 target genome per run
-
-#### Output
-
-- Local ancestry tracts (cM resolution)
-- Per-chromosome ancestry assignments
----
-
-### Output Files
-
-- PCA plots (population structure)
-- ADMIXTURE results (global ancestry proportions)
-- Local ancestry tracts (RFMix)
-- Per-chromosome ancestry summaries (bp and cM)
 
 - 
 ##  References – Genome Assembly
