@@ -365,7 +365,7 @@ The workflow integrates:
 - Population structure analysis (PCA)
 - Global ancestry estimation (ADMIXTURE)
 - Local ancestry inference (RFMix)
-- Integration with structural variation and T2T genome coordinates
+
 
 #### Input Data
 
@@ -380,19 +380,7 @@ The workflow integrates:
 
 
 
----
-
-### Variant Filtering
-
-Retained variants:
-
-- Autosomal variants (chr1–22)
-- PASS variants only
-- Biallelic SNPs
-- MAF ≥ 0.05
-- Missingness ≤ 5%
-
----
+--
 
 ### Reference Panel Construction
 
@@ -461,7 +449,43 @@ Main analyses:
 - First 20 PCs retained
 
 ---
+### Local Ancestry Inference in Colombian T2T Genomes
 
+## Overview
+
+The pipeline integrates:
+
+- Variant calling and filtering from PacBio HiFi data
+- Phasing of autosomal SNPs
+- Harmonization with HGDP + 1000 Genomes reference panels
+- Local ancestry inference using RFMix
+- Genome-wide ancestry assignment across autosomes
+- Generation of ancestry tracks and summary statistics
+
+## Data Sources
+
+- HGDP + 1000 Genomes phased haplotypes
+- T2T human genome assemblies
+- PacBio HiFi sequencing data
+- GRCh38 and T2T-CHM13 references
+
+## Main Tools
+
+- DeepVariant
+- bcftools
+- WhatsHap
+- RFMix
+- Python
+- R
+
+## Output
+
+The workflow generates:
+
+- Local ancestry assignments
+- Chromosome-level ancestry maps
+- Genome-wide ancestry summaries
+- Visualization files 
 
 - 
 ##  References – Genome Assembly
