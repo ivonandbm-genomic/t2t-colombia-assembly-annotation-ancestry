@@ -6,7 +6,7 @@
 
 This repository contains the complete bioinformatics workflow for:
 
-- **De novo genome assembly (PacBio HiFi)**
+- **Genome assembly (PacBio HiFi)**
 - **Genome annotation**
 - **Variant detection**
 - **Global and local ancestry inference**
@@ -377,10 +377,9 @@ The workflow integrates:
   - AMR
   - EUR
   - EAS
+### Reference panel construction
 
-
-
---
+A balanced reference panel was initially generated from the HGDP + 1000 Genomes resource (gnomAD v3.1.2), selecting 300 unrelated high-quality individuals from each of five continental superpopulations: African (AFR), American (AMR), European (EUR), East Asian (EAS), and South Asian (SAS). Preliminary ancestry analyses indicated that the South Asian (SAS) component contributed negligibly to the Colombian genomes analyzed in this study. Therefore, downstream global and local ancestry analyses were performed using a four-superpopulation reference panel (AFR, AMR, EUR, and EAS), which better represented the ancestral composition of the study population.
 
 ### Reference Panel Construction
 
@@ -436,7 +435,7 @@ Quality control was performed using:
 Performed using PLINK:
 
 
-plink --indep-pairwise 50 10 0.2
+plink --indep-pairwise 50 5 0.2
 
 
 ### Principal Component Analysis (PCA)
