@@ -73,8 +73,8 @@ This repository provides:
 - **RepeatMasker**
 - **RepeatModeler**
 - **Liftoff v1.6.3**
+- **Dipcall**
   
-- 
 
 ---
 ## Repository Structure
@@ -340,21 +340,18 @@ SVs_merge_4/filtered/
 Tool:
 
 * DeepVariant
+* Dipcall
 
-Model:
-
-* PACBIO
 
 Detected Variants:
 
 * SNPs
 * Indels
-
+* Filter indels<50pb
+  
 Output:
 
 * VCF
-* gVCF
-
 
 ###  11. Global and Local Ancestry Inference
 
