@@ -247,7 +247,7 @@ def clean_fasta_headers(root_dir):
                             fout.write(line)
 
                 os.replace(temp_path, fasta_path)
-                print(f"✅ Cleaned: {fasta_path}")
+                print(f" Cleaned: {fasta_path}")
 
 # Example usage
 #clean_fasta_headers("./outputs/04/scaffolds")
@@ -873,8 +873,28 @@ def filter_SNVs(output, genome):
             command=f"bcftools view -f 'PASS' {file}  -o {out}/{basename}"
             subprocess.run(command, check=True, shell=True)
             
+#small_variants(dipcall, T2T, scaffolds)
+import os,subprocess
 
+folder_assemblies="/mnt/diskrare/arlenb/04/scaffolds/filter_t2t"
+reference_genome="/home/rare/arlen/reference/chm13v22.fasta"
+output="/home/rare/arlen/outputs/Structural_variants"
 
+def dipcall (folder_assemblies,reference_genome, output):
+    out=f"{output}/dipcall"
+    os.makedirs(out, exist_ok=True)
+    for x in os.listdir(folder_assemblies):
+        if x.endswith("hap1.fa"):
+            hap1=os.path.join(folder_assemblies,x)
+            hap2=os.path.join(folder_assemblies,x.replace("hap1.fa","hap2.fa"))
+            basename=os.path.basename(x).replace("hap1.fa","")
+            program="/home/rare/programs/dipcall/dipcall.kit/run-dipcall"
+            cmd_1=f"{program} {out}/{basename} {reference_genome} {hap1} {hap2} -t 32 > {out}/{basename}.mak"
+            cmd_2=f"make -j2 -f {out}/{basename}.mak"
+            subprocess.run(cmd_1,shell=True)
+            subprocess.run(cmd_2,shell=True)
+
+dipcall (folder_assemblies,reference_genome, output)
 
 
 
