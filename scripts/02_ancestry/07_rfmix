@@ -1,0 +1,698 @@
+#SPLIT PHASED 18 GENOMES BY CHROMOSOME#
+
+#!/bin/bash
+set -euo pipefail
+
+# Directory containing fully phased VCFs
+PHASED_DIR="18genfased"
+SPLIT_DIR="18gen_by_chr"
+
+mkdir -p $SPLIT_DIR
+cd $PHASED_DIR
+
+echo "Starting chromosome-level split for the 18 genomes..."
+
+# Mapping: long sample name → short code (001 to 018)
+declare -A CODES
+CODES["08_1_A01_bc2043_001P"]=001
+CODES["08_1_A01_bc2044_002P"]=002
+CODES["08_1_B01_bc2045_003P"]=003
+CODES["08_1_C01_bc2046_004P"]=004
+CODES["08_1_A01_bc2047_005P"]=005
+CODES["08_1_B01_bc2048_006P"]=006
+CODES["08_1_C01_bc2049_007P"]=007
+CODES["08_1_C01_bc2050_008D"]=008
+CODES["08_1_B01_bc2051_009D"]=009
+CODES["08_1_D01_bc2052_010D"]=010
+CODES["08_1_D01_bc2053_011D"]=011
+CODES["08_1_D01_bc2054_012D"]=012
+CODES["08_1_A01_bc2055_013A"]=013
+CODES["08_1_A01_bc2056_014A"]=014
+CODES["08_1_B01_bc2057_015A"]=015
+CODES["08_1_B01_bc2058_016D"]=016
+CODES["08_1_C01_bc2059_017C"]=017
+CODES["08_1_D01_bc2060_018C"]=018
+
+for full_vcf in *.autosomes.fully_phased.vcf.gz; do
+    [[ -f "$full_vcf" ]] || continue
+    
+    base=${full_vcf%.autosomes.fully_phased.vcf.gz}
+    code=${CODES[$base]:-UNKNOWN}
+    
+    if [[ "$code" == "UNKNOWN" ]]; then
+        echo "Warning: Unrecognized sample $base → skipping"
+        continue
+    fi
+    
+    sample_dir="../$SPLIT_DIR/$code"
+    mkdir -p "$sample_dir"
+    
+    echo "Splitting genome $code ($base)..."
+    
+    # Chromosomes 1-22
+    for chr in {1..22}; do
+        out="${sample_dir}/chr${chr}.vcf.gz"
+        bcftools view -Oz -o "$out" "$full_vcf" $chr && tabix -p vcf "$out" &
+    done
+    
+    # Chromosomes X and Y (if present in the VCF; does not fail if absent)
+    bcftools view -Oz -o "${sample_dir}/chrX.vcf.gz" "$full_vcf" X 2>/dev/null && tabix -p vcf "${sample_dir}/chrX.vcf.gz" || true &
+    bcftools view -Oz -o "${sample_dir}/chrY.vcf.gz" "$full_vcf" Y 2>/dev/null && tabix -p vcf "${sample_dir}/chrY.vcf.gz" || true &
+    
+    wait  # wait until processing for the current genome is completed
+    echo "Genome $code successfully split and indexed"
+done
+
+echo "All 18 genomes were successfully split by chromosome into $SPLIT_DIR"
+___________________________________________________________________________________________________________________________________________________________#MERGED#
+#panel1199 chrN
++
+sample chrN
+↓
+common site intersection
+↓
+exact CHROM POS REF ALT harmonization
+↓
+final panel
+↓
+panel + sample merge
+↓
+merged VCF with 1200 samples
+___________________________________________________________________________________________________________________________________________________________#MERGED 017 (COLM)#
+
+
+#MERGED 017#
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+# =========================
+# PATHS FOR SAMPLE 017
+# =========================
+SAMPLE="017"
+
+BASE_SAMPLE="/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/18genfased/${SAMPLE}"
+OUTBASE="${BASE_SAMPLE}/merged"
+PANELDIR="/mnt/diskrare/ivonb/refamerindios/panel_hgdp1kg_1200"
+
+mkdir -p "$OUTBASE"
+
+for chr in {1..22}; do
+  echo "==================== ${SAMPLE} chr${chr} ===================="
+
+  odir="${OUTBASE}/isec_chr${chr}"
+  mkdir -p "$odir"
+  cd "$odir"
+
+  PANEL="${PANELDIR}/hgdp1kgp_chr${chr}.SNV_ONLY.BIAL.panel1199.vcf.gz"
+  QUERY="${BASE_SAMPLE}/chr${chr}.vcf.gz"
+
+  [[ -s "$PANEL" ]] || { echo "PANEL file not found: $PANEL"; exit 1; }
+  [[ -s "$QUERY" ]] || { echo "QUERY file not found: $QUERY"; exit 1; }
+
+  # Remove previous outputs
+  rm -f chr${chr}.${SAMPLE}.common.vcf.gz chr${chr}.${SAMPLE}.common.vcf.gz.tbi \
+        chr${chr}.panel1199.final.vcf.gz chr${chr}.panel1199.final.vcf.gz.tbi \
+        chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz \
+        chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz.tbi \
+        sites.pos sites${SAMPLE}.4col.sorted panel.header.vcf panel.body.filtered \
+        0000.vcf.gz 0000.vcf.gz.tbi 0001.vcf.gz 0001.vcf.gz.tbi README.txt sites.txt
+
+  # 1. Intersection between panel and sample 017
+  bcftools isec -n=2 -w1 -O z -p "$odir" "$PANEL" "$QUERY"
+
+  [[ -s sites.txt ]] || { echo "sites.txt was not generated"; exit 1; }
+  nsites=$(wc -l < sites.txt)
+  echo "sites.txt: $nsites"
+
+  # 2. Filter sample 017 by common positions
+  cut -f1,2 sites.txt > sites.pos
+
+  bcftools view -T sites.pos -Oz \
+    -o chr${chr}.${SAMPLE}.common.vcf.gz \
+    "$QUERY"
+
+  tabix -f -p vcf chr${chr}.${SAMPLE}.common.vcf.gz
+
+  nquery=$(bcftools view -H chr${chr}.${SAMPLE}.common.vcf.gz | wc -l)
+  echo "${SAMPLE}.common: $nquery"
+
+  [[ "$nquery" -eq "$nsites" ]] || { echo "${SAMPLE}.common != sites.txt"; exit 1; }
+
+  # 3. Extract exact CHROM POS REF ALT sites from sample 017
+  bcftools query -f'%CHROM\t%POS\t%REF\t%ALT\n' chr${chr}.${SAMPLE}.common.vcf.gz \
+    | sort -u > sites${SAMPLE}.4col.sorted
+
+  # 4. Build final panel with exact allele matching
+  bcftools view -h "$PANEL" > panel.header.vcf
+
+  bcftools query -f'%CHROM\t%POS\t%REF\t%ALT\t%CHROM\t%POS\t%ID\t%REF\t%ALT\t%QUAL\t%FILTER\t%INFO\tGT[\t%GT]\n' "$PANEL" \
+  | awk 'BEGIN{FS=OFS="\t"}
+      NR==FNR { key[$1"\t"$2"\t"$3"\t"$4]=1; next }
+      {
+        k=$1"\t"$2"\t"$3"\t"$4
+        if(k in key){
+          for(i=5;i<=NF;i++) printf "%s%s", $i, (i==NF?ORS:OFS)
+        }
+      }' sites${SAMPLE}.4col.sorted - \
+  > panel.body.filtered
+
+  cat panel.header.vcf panel.body.filtered | bgzip -c > chr${chr}.panel1199.final.vcf.gz
+  tabix -f -p vcf chr${chr}.panel1199.final.vcf.gz
+
+  npanel=$(bcftools view -H chr${chr}.panel1199.final.vcf.gz | wc -l)
+  nsamp_panel=$(bcftools query -l chr${chr}.panel1199.final.vcf.gz | wc -l)
+
+  echo "panel.final: $npanel | samples(panel)=$nsamp_panel"
+
+  [[ "$npanel" -eq "$nsites" ]] || { echo "panel.final != sites.txt"; exit 1; }
+  [[ "$nsamp_panel" -eq 1199 ]] || { echo "panel.final samples != 1199"; exit 1; }
+
+  # 5. Merge panel + sample 017
+  bcftools merge -m none -Oz \
+    -o chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz \
+    chr${chr}.panel1199.final.vcf.gz \
+    chr${chr}.${SAMPLE}.common.vcf.gz
+
+  tabix -f -p vcf chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz
+
+  nmerged=$(bcftools view -H chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz | wc -l)
+  nsamp_merged=$(bcftools query -l chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz | wc -l)
+
+  echo "merged: $nmerged | samples(merged)=$nsamp_merged"
+
+  [[ "$nmerged" -eq "$nsites" ]] || { echo "merged != sites.txt"; exit 1; }
+  [[ "$nsamp_merged" -eq 1200 ]] || { echo "merged samples != 1200"; exit 1; }
+
+  echo "chr${chr} OK"
+done
+
+echo "======== FINAL SUMMARY ${SAMPLE} ========"
+
+for chr in {1..22}; do
+  dir="${OUTBASE}/isec_chr${chr}"
+  nsites=$(wc -l < "${dir}/sites.txt" 2>/dev/null || echo 0)
+  nmerged=$(bcftools view -H "${dir}/chr${chr}.panel1199_plus_${SAMPLE}.common.merged.vcf.gz" 2>/dev/null | wc -l)
+  echo "chr${chr} sites=${nsites} merged=${nmerged}"
+done
+
+
+
+___________________________________________________________________________________________________________________________________________________________#MERGED 018 (COLF)#
+#MERGED GENOME_018#
+
+#!/usr/bin/env python3
+import os
+import sys
+import shutil
+import subprocess
+from pathlib import Path
+
+BASE_018 = Path("/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/18genfased/018")
+OUTBASE = BASE_018 / "with_ref_panel1199"
+PANELDIR = Path("/mnt/diskrare/ivonb/refamerindios/panel_hgdp1kg_1200")
+
+CHRS = list(range(1, 23))
+
+def run(cmd, cwd=None):
+    """Run a shell command and raise an error if it fails."""
+    print("  $", " ".join(cmd))
+    subprocess.run(cmd, cwd=cwd, check=True)
+
+def capture(cmd, cwd=None) -> str:
+    """Run a shell command and capture stdout."""
+    return subprocess.check_output(cmd, cwd=cwd, text=True).strip()
+
+def count_sites_txt(path: Path) -> int:
+    return sum(1 for _ in path.open())
+
+def count_vcf_records(vcf_gz: Path) -> int:
+    out = capture(["bash", "-lc", f"bcftools view -H {vcf_gz} | wc -l"])
+    return int(out)
+
+def count_samples(vcf_gz: Path) -> int:
+    out = capture(["bash", "-lc", f"bcftools query -l {vcf_gz} | wc -l"])
+    return int(out)
+
+def main():
+    OUTBASE.mkdir(parents=True, exist_ok=True)
+
+    for chr_ in CHRS:
+        print(f"==================== chr{chr_} ====================")
+        odir = OUTBASE / f"isec_chr{chr_}"
+        odir.mkdir(parents=True, exist_ok=True)
+
+        panel = PANELDIR / f"hgdp1kgp_chr{chr_}.SNV_ONLY.BIAL.panel1199.vcf.gz"
+        query = BASE_018 / f"chr{chr_}.vcf.gz"
+
+        if not panel.exists() or panel.stat().st_size == 0:
+            print(f"PANEL file not found: {panel}", file=sys.stderr)
+            sys.exit(1)
+
+        if not query.exists() or query.stat().st_size == 0:
+            print(f"QUERY file not found: {query}", file=sys.stderr)
+            sys.exit(1)
+
+        # Remove previous outputs
+        to_remove = [
+            odir / f"chr{chr_}.018.common.vcf.gz",
+            odir / f"chr{chr_}.018.common.vcf.gz.tbi",
+            odir / f"chr{chr_}.panel1199.final.vcf.gz",
+            odir / f"chr{chr_}.panel1199.final.vcf.gz.tbi",
+            odir / f"chr{chr_}.panel1199_plus_018.common.merged.vcf.gz",
+            odir / f"chr{chr_}.panel1199_plus_018.common.merged.vcf.gz.tbi",
+            odir / "sites.pos",
+            odir / "sites018.4col.sorted",
+            odir / "panel.header.vcf",
+            odir / "panel.body.filtered",
+            odir / "0000.vcf.gz",
+            odir / "0000.vcf.gz.tbi",
+            odir / "0001.vcf.gz",
+            odir / "0001.vcf.gz.tbi",
+            odir / "README.txt",
+            odir / "sites.txt",
+        ]
+
+        for p in to_remove:
+            if p.exists():
+                if p.is_dir():
+                    shutil.rmtree(p)
+                else:
+                    p.unlink()
+
+        # 1) Intersection
+        run([
+            "bcftools", "isec", "-n=2", "-w1", "-O", "z",
+            "-p", str(odir),
+            str(panel), str(query)
+        ])
+
+        sites_txt = odir / "sites.txt"
+
+        if not sites_txt.exists() or sites_txt.stat().st_size == 0:
+            print("sites.txt was not generated", file=sys.stderr)
+            sys.exit(1)
+
+        nsites = count_sites_txt(sites_txt)
+        print(f"sites.txt: {nsites}")
+
+        # 2) Filter sample 018 by positions
+        sites_pos = odir / "sites.pos"
+        run(["bash", "-lc", f"cut -f1,2 {sites_txt} > {sites_pos}"])
+
+        vcf_018_common = odir / f"chr{chr_}.018.common.vcf.gz"
+
+        run([
+            "bcftools", "view",
+            "-T", str(sites_pos),
+            "-Oz",
+            "-o", str(vcf_018_common),
+            str(query)
+        ])
+
+        run(["tabix", "-f", "-p", "vcf", str(vcf_018_common)])
+
+        n018 = count_vcf_records(vcf_018_common)
+        print(f"018.common: {n018}")
+
+        if n018 != nsites:
+            print("018.common != sites.txt", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"chr{chr_} OK")
+
+if __name__ == "__main__":
+    main()
+
+
+
+__________________________________________________________________________________________________________________________________#RFMIX FILES#
+
+#RFMIX FILE PREPARATION#
+
+_________________________________________________________________________________________________________________________________#017 (COLM)#  
+#query_ref_locations_017#
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import subprocess
+from pathlib import Path
+import numpy as np
+import pandas as pd
+from cyvcf2 import VCF
+
+# ================= CONFIG =================
+CHRS = range(1, 23)
+
+BASE = Path(
+    "/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/"
+    "18genomes/18genfased/017/merged"
+)
+
+PANEL_IDS = Path(
+    "/mnt/diskrare/ivonb/refamerindios/panel_hgdp1kg_1200/panel_1199.ids"
+)
+
+MAPDIR = Path("/home/rare/ivon/outputs/rfmix/rfmix_map")
+# ==========================================
+
+
+def run(cmd):
+    print(">", " ".join(cmd))
+    subprocess.run(cmd, check=True)
+
+
+def load_genetic_map(chr_str):
+    gmap = MAPDIR / f"genetic_map_chr{chr_str}_rfmix.txt"
+
+    if not gmap.exists():
+        raise FileNotFoundError(gmap)
+
+    df = pd.read_csv(
+        gmap,
+        sep=r"\s+",
+        header=None,
+        names=["pos", "cM", "id"]
+    ).dropna()
+
+    df = df.sort_values("pos")
+    return df["pos"].values, df["cM"].values
+
+
+def make_snp_locations(vcf_path, chr_str, out_path):
+    pos_arr, cm_arr = load_genetic_map(chr_str)
+    vcf = VCF(str(vcf_path))
+
+    out = []
+
+    for v in vcf:
+        if not v.is_snp or len(v.ALT) != 1:
+            continue
+
+        pos = v.POS
+        cm = np.interp(pos, pos_arr, cm_arr)
+        vid = f"{v.CHROM}:{pos}:{v.REF}:{v.ALT[0]}"
+        out.append(f"{vid}\t{pos}\t{cm}\n")
+
+    if not out:
+        raise RuntimeError(f"No SNPs found in {vcf_path}")
+
+    out_path.write_text("".join(out))
+
+
+def main():
+    for chrn in CHRS:
+        chr_str = str(chrn)
+        idir = BASE / f"isec_chr{chr_str}"
+        merged = idir / f"chr{chr_str}.panel1199_plus_017.common.merged.vcf.gz"
+
+        if not merged.exists():
+            print(f"chr{chr_str}: merged file not found, skipping")
+            continue
+
+        print(f"\n=========== chr{chr_str} ===========")
+
+        # Detect query sample
+        res = subprocess.check_output(
+            ["bcftools", "query", "-l", str(merged)],
+            text=True
+        ).strip().splitlines()
+
+        query_id = res[-1]
+        print("Query ID:", query_id)
+
+        # REF
+        ref_vcf = idir / f"chr{chr_str}.ref.vcf.gz"
+
+        run([
+            "bcftools", "view",
+            "-S", str(PANEL_IDS),
+            "-Oz", "-o", str(ref_vcf),
+            str(merged)
+        ])
+
+        run(["tabix", "-p", "vcf", str(ref_vcf)])
+
+        # QUERY
+        query_vcf = idir / f"chr{chr_str}.query.vcf.gz"
+
+        run([
+            "bcftools", "view",
+            "-s", query_id,
+            "-Oz", "-o", str(query_vcf),
+            str(merged)
+        ])
+
+        run(["tabix", "-p", "vcf", str(query_vcf)])
+
+        # SNP locations
+        snp_loc = idir / f"chr{chr_str}.snp_locations"
+        make_snp_locations(merged, chr_str, snp_loc)
+
+        print(f"chr{chr_str} completed: ref | query | snp_locations")
+
+
+if __name__ == "__main__":
+    main()
+_____________________________________________________________________________________________________________________________________________________#018 (COLF)#
+#018 (COLF)#
+#.query_ref_location_018#
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import subprocess
+from pathlib import Path
+import numpy as np
+import pandas as pd
+from cyvcf2 import VCF
+
+# ================= CONFIG =================
+CHRS = range(1, 23)
+
+# Base directory for sample 018 (contains isec_chr1..isec_chr22)
+BASE = Path(
+    "/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/"
+    "18genomes/18genfased/018/with_ref_panel1199"
+)
+
+# Panel IDs list (1199)
+PANEL_IDS = Path(
+    "/mnt/diskrare/ivonb/refamerindios/panel_hgdp1kg_1200/panel_1199.ids"
+)
+
+# Map file (IDs -> superpopulation), 2 columns: ID <tab/space> SUPERPOP
+SUPERPOP_MAP = Path("/mnt/diskrare/ivonb/refamerindios/superpop_4groups.map")
+
+# Directory containing genetic_map_chrN_rfmix.txt
+MAPDIR = Path("/home/rare/ivon/outputs/rfmix/rfmix_map")
+# ==========================================
+
+
+def run(cmd):
+    print(">", " ".join(map(str, cmd)))
+    subprocess.run(list(map(str, cmd)), check=True)
+
+
+def load_genetic_map(chr_str: str):
+    gmap = MAPDIR / f"genetic_map_chr{chr_str}_rfmix.txt"
+    if not gmap.exists():
+        raise FileNotFoundError(f"Genetic map not found: {gmap}")
+
+    df = pd.read_csv(
+        gmap,
+        sep=r"\s+",
+        header=None,
+        names=["pos", "cM", "id"],
+        dtype={"pos": float, "cM": float, "id": str},
+    ).dropna(subset=["pos", "cM"])
+
+    df = df.sort_values("pos")
+    return df["pos"].to_numpy(dtype=float), df["cM"].to_numpy(dtype=float)
+
+
+def make_snp_locations_3col(vcf_path: Path, chr_str: str, out_path: Path):
+    """
+    Output in 3-column format:
+      chrN <TAB> POS <TAB> cM
+    """
+    pos_arr, cm_arr = load_genetic_map(chr_str)
+    vcf = VCF(str(vcf_path))
+
+    out_lines = []
+    total = 0
+    kept = 0
+
+    for v in vcf:
+        total += 1
+        if (not v.is_snp) or (len(v.ALT) != 1):
+            continue
+
+        pos = int(v.POS)
+        cm = float(np.interp(pos, pos_arr, cm_arr))
+        out_lines.append(f"{v.CHROM}\t{pos}\t{cm}\n")
+        kept += 1
+
+    if not out_lines:
+        raise RuntimeError(f"No biallelic SNPs found in {vcf_path}")
+
+    out_path.write_text("".join(out_lines))
+    print(f"   snp_locations: {out_path.name} | SNPs={kept} | Total_VCF={total}")
+
+
+def detect_query_id(merged_vcf: Path) -> str:
+    """
+    In merged files, the last sample is typically the query sample.
+    """
+    samples = subprocess.check_output(
+        ["bcftools", "query", "-l", str(merged_vcf)],
+        text=True
+    ).strip().splitlines()
+
+    if not samples:
+        raise RuntimeError(f"VCF contains no samples in header: {merged_vcf}")
+
+    return samples[-1]
+
+
+def make_labels_file_for_ref(ref_vcf: Path, out_labels: Path):
+    """
+    Creates chrN.superpopulation_labels.txt with 2 columns:
+      <ID> <SUPERPOP>
+    For all samples in ref_vcf (1199).
+    """
+    ref_ids = subprocess.check_output(
+        ["bcftools", "query", "-l", str(ref_vcf)],
+        text=True
+    ).strip().splitlines()
+
+    if not ref_ids:
+        raise RuntimeError(f"Reference VCF contains no samples: {ref_vcf}")
+
+    pop = {}
+    with SUPERPOP_MAP.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+
+            pop[parts[0]] = parts[1]
+
+    na = 0
+    with out_labels.open("w") as out:
+        for sid in ref_ids:
+            sp = pop.get(sid, "NA")
+            if sp == "NA":
+                na += 1
+            out.write(f"{sid}\t{sp}\n")
+
+    print(f"   labels: {out_labels.name} | n={len(ref_ids)} | NA={na}")
+
+
+def main():
+    for chrn in CHRS:
+        chr_str = str(chrn)
+        idir = BASE / f"isec_chr{chr_str}"
+        merged = idir / f"chr{chr_str}.panel1199_plus_018.common.merged.vcf.gz"
+
+        if not merged.exists():
+            print(f"chr{chr_str}: {merged.name} not found, skipping")
+            continue
+
+        print(f"\n=========== chr{chr_str} (018) ===========")
+        query_id = detect_query_id(merged)
+        print("   Detected query ID:", query_id)
+
+        # ---------- REF ----------
+        ref_vcf = idir / f"chr{chr_str}.ref.vcf.gz"
+        run([
+            "bcftools", "view",
+            "-S", str(PANEL_IDS),
+            "-Oz", "-o", str(ref_vcf),
+            str(merged)
+        ])
+        run(["tabix", "-p", "vcf", str(ref_vcf)])
+
+        # ---------- QUERY ----------
+        query_vcf = idir / f"chr{chr_str}.query.vcf.gz"
+        run([
+            "bcftools", "view",
+            "-s", query_id,
+            "-Oz", "-o", str(query_vcf),
+            str(merged)
+        ])
+        run(["tabix", "-p", "vcf", str(query_vcf)])
+
+        # ---------- SNP locations ----------
+        snp_loc = idir / f"chr{chr_str}.snp_locations.fixed"
+        make_snp_locations_3col(merged, chr_str, snp_loc)
+
+        # ---------- Labels ----------
+        labels = idir / f"chr{chr_str}.superpopulation_labels.txt"
+        make_labels_file_for_ref(ref_vcf, labels)
+
+        print(f"chr{chr_str} completed: ref | query | snp_locations.fixed | labels")
+
+    print("\nCompleted. Files generated per chromosome:")
+    print("chrN.ref.vcf.gz, chrN.query.vcf.gz, chrN.snp_locations.fixed, chrN.superpopulation_labels.txt")
+
+
+if __name__ == "__main__":
+    main()
+
+_______________________________________________________________________________________________________________________________#RUN_RFMIX#
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+RFMIX="$HOME/programs/rfmix/rfmix"
+THREADS=8
+
+# =========================
+# 017
+# =========================
+BASE_017="$HOME/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/18genfased/017/merged"
+OUT_017="${BASE_017}/rfmix_results"
+
+mkdir -p "$OUT_017"
+
+for CHR in {1..22}; do
+    echo "===== RFMix 017 chr${CHR} ====="
+
+    mkdir -p "${OUT_017}/chr${CHR}"
+
+    "$RFMIX" \
+      -f "${BASE_017}/isec_chr${CHR}/chr${CHR}.query.vcf.gz" \
+      -r "${BASE_017}/isec_chr${CHR}/chr${CHR}.ref.vcf.gz" \
+      -m "${BASE_017}/isec_chr${CHR}/chr${CHR}.superpopulation_labels.txt" \
+      -g "${BASE_017}/isec_chr${CHR}/chr${CHR}.snp_locations" \
+      --chromosome="chr${CHR}" \
+      -o "${OUT_017}/chr${CHR}/rfmix_chr${CHR}_output" \
+      --n-threads="$THREADS"
+done
+
+# =========================
+# 018
+# =========================
+BASE_018="$HOME/ivon/outputs/rfmix/merged_018"
+OUT_018="${BASE_018}/RFMIX"
+
+mkdir -p "$OUT_018"
+
+for CHR in {1..22}; do
+    echo "===== RFMix 018 chr${CHR} ====="
+
+    "$RFMIX" \
+      -f "${BASE_018}/chr${CHR}.query.vcf.gz" \
+      -r "${BASE_018}/chr${CHR}.ref.vcf.gz" \
+      -m "${BASE_018}/superpopulation_labels.txt" \
+      -g "${BASE_018}/merged_chr${CHR}.snp_locations" \
+      --chromosome="chr${CHR}" \
+      -o "${OUT_018}/rfmix_chr${CHR}_output" \
+      --n-threads="$THREADS"
+done
