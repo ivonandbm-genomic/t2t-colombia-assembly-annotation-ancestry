@@ -1,0 +1,170 @@
+______________________________________________________________________________________________________________________________#PLOTS_RFMIX#
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# === Paths ===
+BASE_DIR = "/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/plink_individual"
+PREFIX = "merged_18_1200_common_qc05_maf05_nomind_pruned"
+
+# IID -> SUPERPOP map (2 columns: IID \t AFR/EUR/EAS/AMR)
+MAP_SUPERPOP = "/mnt/diskrare/ivonb/refamerindios/superpop_4groups.map"
+
+# Ks already computed
+K_LIST = [1, 2, 3, 4, 5, 6]
+
+# Block order in the plot
+BLOCK_ORDER = ["AFR", "EUR", "EAS", "AMR", "OWN", "UNK"]
+
+# === Utilities ===
+def short_pb(iid: str) -> str:
+    # PB000696_017C... -> "017"
+    if iid.startswith("PB000696_"):
+        try:
+            return iid.split("_")[1][:3]
+        except Exception:
+            return iid
+    return iid
+
+def load_fam_ids(fam_path: str) -> pd.DataFrame:
+    fam = pd.read_csv(fam_path, sep=r"\s+", header=None)
+    fam.columns = ["FID", "IID", "PID", "MID", "SEX", "PHENO"]
+    return fam[["FID", "IID"]]
+
+def load_map(map_path: str) -> pd.DataFrame:
+    m = pd.read_csv(map_path, sep=r"\s+", header=None, names=["IID", "SUPERPOP"])
+    return m
+
+def ensure_q_shape(q: pd.DataFrame, k: int):
+    if q.shape[1] != k:
+        raise ValueError(f"Q file has {q.shape[1]} columns but K={k}. Check the .Q file.")
+
+def plot_one_k(df_ordered: pd.DataFrame, Q: np.ndarray, k: int, out_png: str):
+    x = np.arange(df_ordered.shape[0])
+    bottom = np.zeros(df_ordered.shape[0])
+
+    plt.figure(figsize=(20, 6))
+
+    for j in range(k):
+        plt.bar(x, Q[:, j], bottom=bottom, width=1.0)
+        bottom += Q[:, j]
+
+    # Block separators
+    blocks = df_ordered["BLOCK"].values
+    cuts = np.where(blocks[:-1] != blocks[1:])[0]
+
+    for c in cuts:
+        plt.axvline(c + 0.5, linewidth=1)
+
+    plt.xticks([], [])
+
+    # Labels for PB samples
+    pb_mask = df_ordered["IID"].str.startswith("PB000696_").fillna(False).values
+
+    for i in np.where(pb_mask)[0]:
+        lab = df_ordered.iloc[i]["SHORT"]
+
+        if lab in ("017", "018"):
+            plt.text(i, 1.02, lab, ha="center", va="bottom",
+                     fontsize=10, fontweight="bold", rotation=90)
+        else:
+            plt.text(i, 1.02, lab, ha="center", va="bottom",
+                     fontsize=8, rotation=90)
+
+    # Block labels
+    start = 0
+
+    for b in BLOCK_ORDER:
+        idx = np.where(df_ordered["BLOCK"].values == b)[0]
+
+        if len(idx) == 0:
+            continue
+
+        mid = (idx[0] + idx[-1]) / 2
+
+        plt.text(
+            mid, 1.10,
+            f"{b} (n={len(idx)})",
+            ha="center",
+            va="bottom",
+            fontsize=11
+        )
+
+        start = idx[-1] + 1
+
+    plt.ylim(0, 1.15)
+    plt.ylabel("Proportion (Q)")
+    plt.title(
+        f"ADMIXTURE (supervised/unsupervised) – {PREFIX} – K={k}\n"
+        "Ordered by superpopulation + 18 genomes (017 and 018 highlighted)"
+    )
+
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=300)
+    plt.close()
+
+# === Main ===
+def main():
+    os.chdir(BASE_DIR)
+
+    fam_path = f"{PREFIX}.fam"
+    fam = load_fam_ids(fam_path)
+
+    mp = load_map(MAP_SUPERPOP)
+
+    # Merge while preserving .fam order
+    df = fam.merge(mp, on="IID", how="left")
+
+    # Block classification
+    df["BLOCK"] = df["SUPERPOP"].fillna("UNK")
+
+    # Own genomes
+    mask_own = df["IID"].str.startswith("PB000696_").fillna(False)
+    df.loc[mask_own, "BLOCK"] = "OWN"
+
+    # Short labels for PB samples
+    df["SHORT"] = df["IID"].apply(short_pb)
+
+    # Sort by block
+    df["BLOCK"] = pd.Categorical(df["BLOCK"], categories=BLOCK_ORDER, ordered=True)
+    df_sorted = df.sort_values(["BLOCK", "IID"]).reset_index(drop=True)
+
+    # Reorder Q matrix
+    idx_map = pd.Series(np.arange(df.shape[0]), index=df["IID"]).to_dict()
+    original_positions = df_sorted["IID"].map(idx_map).values
+
+    print("Counts per block:")
+    print(df_sorted["BLOCK"].value_counts(dropna=False))
+
+    for k in K_LIST:
+        qfile = f"{PREFIX}.{k}.Q"
+
+        if not os.path.exists(qfile) or os.path.getsize(qfile) == 0:
+            print(f"[WARNING] File not found: {qfile} (skipped)")
+            continue
+
+        q = pd.read_csv(qfile, sep=r"\s+", header=None)
+        ensure_q_shape(q, k)
+
+        Q = q.values.astype(float)
+        Q_sorted = Q[original_positions, :]
+
+        out_png = os.path.join(
+            BASE_DIR,
+            f"{PREFIX}.K{k}.Q.superpop_blocks.png"
+        )
+
+        plot_one_k(df_sorted, Q_sorted, k, out_png)
+
+        print(f"[OK] Saved: {out_png}")
+
+if __name__ == "__main__":
+    main()
+
+
+
