@@ -1,0 +1,125 @@
+# ADMIXTURE#
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import subprocess
+from pathlib import Path
+import sys
+import re
+
+# =========================
+# CONFIG
+# =========================
+WORKDIR = Path("/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/plink_individual")
+
+ADMIXTURE = "/usr/local/bin/admixture"
+PREFIX = "merged_18_1200_common_qc05_maf05_nomind_pruned"
+
+K_MIN = 1
+K_MAX = 6
+CV_FOLDS = 10
+THREADS = 32
+SEED = 12345
+
+# =========================
+# CHECKS
+# =========================
+def check_inputs():
+    if not Path(ADMIXTURE).exists():
+        sys.exit(f"ADMIXTURE not found at: {ADMIXTURE}")
+
+    for ext in ("bed", "bim", "fam"):
+        f = WORKDIR / f"{PREFIX}.{ext}"
+        if not f.exists() or f.stat().st_size == 0:
+            sys.exit(f"Missing or empty file: {f}")
+
+def run_one_k(k: int) -> Path:
+    log_file = WORKDIR / f"cv_K{k}.log"
+    cmd = [
+        ADMIXTURE,
+        f"--cv={CV_FOLDS}",
+        f"-j{THREADS}",
+        f"--seed={SEED}",
+        f"{PREFIX}.bed",
+        str(k),
+    ]
+
+    print("\n======================================")
+    print(f"Running ADMIXTURE K={k}")
+    print("CMD:", " ".join(cmd))
+    print("LOG:", log_file.name)
+    print("======================================")
+
+    # Execute and simultaneously print/save output
+    with open(log_file, "w") as log:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=WORKDIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            print(line, end="")
+            log.write(line)
+
+    rc = proc.wait()
+    if rc != 0:
+        sys.exit(f"ADMIXTURE failed at K={k} (return code={rc}). Check {log_file}")
+
+    return log_file
+
+def extract_cv_error(log_file: Path) -> str | None:
+    # Search for lines such as: "CV error (K=4): 0.38712"
+    pat = re.compile(r"CV error\s*\(K=\d+\)\s*:\s*([0-9.eE+-]+)")
+    with open(log_file) as f:
+        for line in f:
+            m = pat.search(line)
+            if m:
+                return m.group(1)
+    return None
+
+def main():
+    check_inputs()
+
+    print("WORKDIR:", WORKDIR)
+    print("PREFIX :", PREFIX)
+    print("ADMIXTURE:", ADMIXTURE)
+    print(f"Parameters: --cv={CV_FOLDS} -j{THREADS} --seed={SEED}  |  K={K_MIN}..{K_MAX}")
+
+    results = []
+
+    for k in range(K_MIN, K_MAX + 1):
+        logf = run_one_k(k)
+        cv = extract_cv_error(logf)
+
+        if cv is None:
+            print(f"'CV error' was not found in {logf.name}")
+        else:
+            results.append((k, cv))
+
+    # Save summary table
+    out_tsv = WORKDIR / "cv_error.tsv"
+
+    with open(out_tsv, "w") as out:
+        out.write("K\tCV_error\n")
+        for k, cv in results:
+            out.write(f"{k}\t{cv}\n")
+
+    print("\nAnalysis completed.")
+    print("Logs: cv_K1.log ... cv_K6.log (same directory)")
+    print("Summary:", out_tsv)
+
+    # Print CV errors
+    if results:
+        print("\nCV errors:")
+        for k, cv in results:
+            print(f"K={k}\tCV={cv}")
+
+if __name__ == "__main__":
+    main()
+    
+    
