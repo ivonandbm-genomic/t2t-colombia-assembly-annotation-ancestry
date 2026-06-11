@@ -1,0 +1,115 @@
+#PHASING#
+
+#Phase genomes#
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import subprocess
+from pathlib import Path
+
+# ───────────────────────────────
+# CONFIGURATION FOR THE 18 GENOMES
+# ───────────────────────────────
+VCF_DIR = Path("/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes")
+BAM_DIR = Path("/mnt/diskrare/arlenb/08/aligned_reads/hg38")
+OUT_DIR = Path("/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/18genfased")
+REF = "/mnt/diskrare/arlenb/reference/hg38.fasta"  # reference genome path
+WHATSHAP = "/home/rare/.local/bin/whatshap"
+
+# Create output directory
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Log file for issues
+log = open("log_phasing_18.txt", "w")
+
+# Exact list of 18 samples
+SAMPLES = [
+    "08_1_A01_bc2043_001P",
+    "08_1_A01_bc2044_002P",
+    "08_1_B01_bc2045_003P",
+    "08_1_C01_bc2046_004P",
+    "08_1_A01_bc2047_005P",
+    "08_1_B01_bc2048_006P",
+    "08_1_C01_bc2049_007P",
+    "08_1_C01_bc2050_008D",
+    "08_1_B01_bc2051_009D",
+    "08_1_D01_bc2052_010D",
+    "08_1_D01_bc2053_011D",
+    "08_1_D01_bc2054_012D",
+    "08_1_A01_bc2055_013A",
+    "08_1_A01_bc2056_014A",
+    "08_1_B01_bc2057_015A",
+    "08_1_B01_bc2058_016D",
+    "08_1_C01_bc2059_017C",
+    "08_1_D01_bc2060_018C"
+]
+
+print("Starting phasing of the 18 genomes using WhatsHap...\n")
+
+for sample in SAMPLES:
+    vcf_path = VCF_DIR / f"{sample}.autosomes.vcf.gz"
+    bam_path = BAM_DIR / f"{sample}.bam"
+    bai_path = BAM_DIR / f"{sample}.bam.bai"
+
+    print(f"Processing: {sample}")
+
+    if not vcf_path.exists():
+        msg = f"Missing VCF: {vcf_path}"
+        print(msg)
+        log.write(msg + "\n")
+        continue
+
+    if not bam_path.exists():
+        msg = f"Missing BAM: {bam_path} (verify whether the .bam.bai index exists)"
+        print(msg)
+        log.write(msg + "\n")
+        continue
+
+    if not bai_path.exists():
+        print("Missing .bai index → creating index...")
+        subprocess.run(["samtools", "index", str(bam_path)], check=True)
+
+    phased_vcf = OUT_DIR / f"{sample}.autosomes.phased.vcf.gz"
+
+    cmd = [
+        WHATSHAP, "phase",
+        "--reference", REF,
+        "--indels",
+        "--ignore-read-groups",
+        "-o", str(phased_vcf),
+        str(vcf_path),
+        str(bam_path)
+    ]
+
+    try:
+        subprocess.run(cmd, check=True)
+        print("   Phasing completed")
+
+        # Index phased VCF
+        subprocess.run(["tabix", "-p", "vcf", str(phased_vcf)], check=True)
+
+        # Optional: retain only fully phased variants (both alleles phased with |)
+        final_vcf = OUT_DIR / f"{sample}.autosomes.fully_phased.vcf.gz"
+
+        subprocess.run([
+            "bcftools", "view",
+            "-i", 'GT~"|"',
+            "-Oz", "-o", str(final_vcf),
+            str(phased_vcf)
+        ], check=True)
+
+        subprocess.run(["tabix", "-p", "vcf", str(final_vcf)], check=True)
+
+        print(f"Completed: {sample} → {final_vcf.name}\n")
+
+    except subprocess.CalledProcessError as e:
+        msg = f"Error in {sample}: {e}"
+        print(msg)
+        log.write(msg + "\n")
+
+log.close()
+
+print("All samples processed")
+print(f"Phased VCFs saved in: {OUT_DIR}")
+print("Check log_phasing_18.txt for potential issues.")
