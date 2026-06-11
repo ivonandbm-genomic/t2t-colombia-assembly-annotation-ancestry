@@ -1,578 +1,259 @@
-#  High-quality HiFi de novo assembled and annotated diploid genomes from admixed Colombian individuals
+# High-quality diploid chromosome-scale assemblies from admixed Colombian individuals reveal non-uniform structural variation and local ancestry patterns
+
+![Platform](https://img.shields.io/badge/Platform-PacBio%20HiFi-blue)
+![Reference](https://img.shields.io/badge/Reference-T2T--CHM13%20v2.0-green)
+![Reference](https://img.shields.io/badge/Reference-GRCh38-green)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
+## Official repository of the study
+
+**High-quality diploid chromosome-scale assemblies from admixed Colombian individuals reveal non-uniform structural variation and local ancestry patterns**
 
 ---
 
-## **Overview**
+## Repository Information
 
-This repository contains the complete bioinformatics workflow for:
-
-- **Genome assembly (PacBio HiFi)**
-- **Genome annotation**
-- **Variant detection**
-- **Global and local ancestry inference**
-
-The analysis was performed on two admixed Colombian individuals from the Valle del Cauca region using long-read sequencing and telomere-to-telomere (T2T) references.
+| Field       | Description                           |
+| ----------- | ------------------------------------- |
+| Author      | Ivon Bolaños                          |
+| Institution | Universidad del Valle                 |
+| Program     | PhD in Biomedical Sciences            |
+| Location    | Cali, Colombia                        |
+| ORCID       | https://orcid.org/0000-0002-8007-8929 |
+| GitHub      | ivonandbm-genomic                     |
 
 ---
+
+## Overview
+
+This repository contains the complete bioinformatics workflows used for the assembly, annotation, variant discovery, repeat characterization, methylation profiling, and ancestry inference of two admixed Colombian genomes generated using PacBio HiFi long-read sequencing technology.
+
+The study presents high-quality diploid chromosome-scale assemblies from two individuals from Valle del Cauca, Colombia, providing a genomic resource for investigating structural variation, ancestry composition, repetitive elements, and epigenomic patterns in an underrepresented Latin American population.
+
+---
+
 ## Study Design
 
-To simplify figure labeling and downstream analyses, the following sample aliases were used throughout the repository and manuscript:
+To simplify figure labeling and downstream analyses, the following aliases were used throughout the repository and manuscript:
 
-| Original sample ID | Alias |
-|---|---|
-| 017 / 017C | COLM |
-| 018 / 018C | COLF |
+| Original Sample ID | Alias |
+| ------------------ | ----- |
+| 017C               | COLM  |
+| 018C               | COLF  |
 
-These aliases are consistently used in figures, population structure analyses, local ancestry plots, and manuscript visualizations.
+These aliases are consistently used in assembly analyses, variant discovery, methylation analyses, ancestry inference, figures, and supplementary materials.
 
-- **Samples:** 2 individuals (COLM and COLF)
-- **Technology:** PacBio HiFi (CCS reads, Q20+)
-- **Coverage:** ~30×
-- **Reference genomes:**
-  - GRCh38
-  - T2T-CHM13 v2.0
+### Sequencing Information
 
----
-
-##  **Data Availability**
-
-Due to ethical and privacy constraints, raw genomic data (**FASTQ, BAM, VCF**) are not publicly available.
-
-This repository provides:
-
-- ✔️ Reproducible pipelines  
-- ✔️ Scripts used in the analysis  
-- ✔️ Summary results and figures  
+| Feature           | Description               |
+| ----------------- | ------------------------- |
+| Technology        | PacBio HiFi (CCS reads)   |
+| Coverage          | ~30×                      |
+| Individuals       | 2                         |
+| Population        | Admixed Colombian         |
+| Geographic Region | Valle del Cauca, Colombia |
+| Reference Genomes | GRCh38 and T2T-CHM13 v2.0 |
 
 ---
 
-##  **Software Requirements**
+## Scientific Scope
 
-- **samtools**
-- **Jellyfish v2.3.1**
-- **GenomeScope 2.0**
-- **hifiasm v0.16.0**
-- **gfatools**
-- **RagTag v2.0.1**
-- **QUAST v5.3.0**
-- **BUSCO v5.8.1**
-- **Merqury v1.3 + Meryl**
-- **SURVIVOR**
--  **pbsv**
-- **Sniffles2**
-- **NanoVar**
-- **cuteSV**
-- **SVIM-asm**
-- **Sawfish**
-- **DeepVariant v1.8.0**
-- **bcftools**
-- **WhatsHap v2.3**
-- **PLINK v1.9**
-- **ADMIXTURE v1.3**
-- **RFMix v1.5.4**
-- **RepeatMasker**
-- **RepeatModeler**
-- **Liftoff v1.6.3**
-- **Dipcall**
-  
+The repository supports analyses related to:
+
+* Genome profiling
+* De novo genome assembly
+* Chromosome-scale scaffolding
+* Assembly quality assessment
+* Gene annotation
+* Repeat annotation
+* Small variant discovery
+* Structural variant discovery
+* CpG methylation analysis
+* Global ancestry inference
+* Local ancestry inference
+* Comparative analyses against GRCh38 and T2T-CHM13
 
 ---
-## Repository Structure
+
+## Workflow Summary
 
 ```text
-scripts/
-├── 01_assembly_annotation.sh
-├── 02_Ancestry.sh
-└── README.md
+PacBio HiFi Reads
+        │
+        ▼
+Genome Profiling
+(Jellyfish + GenomeScope)
+        │
+        ▼
+De Novo Assembly
+(Hifiasm)
+        │
+        ▼
+Reference-guided Scaffolding
+(RagTag)
+        │
+        ▼
+Assembly Quality Assessment
+(QUAST + BUSCO + Merqury)
+        │
+        ▼
+Genome Annotation
+(Liftoff)
+        │
+        ├──────────────┬──────────────┐
+        ▼              ▼              ▼
+Repeat         Small Variants    Structural Variants
+Annotation   DeepVariant/Dipcall  Multi-caller SV
+                                      Discovery
+        │              │              │
+        └──────────────┴──────────────┘
+                       │
+                       ▼
+                Variant Processing
+                       │
+                       ▼
+                Population Structure
+               PCA + ADMIXTURE
+                       │
+                       ▼
+                Local Ancestry
+                    RFMix
+                       
+                       
+                
 ```
 
 ---
 
-## Pipeline Organization
+## Repository Structure
 
-The repository is organized into two main modular pipelines:
+```text
+t2t-colombia-assembly-annotation-ancestry/
 
-### 1. Assembly and Annotation Pipeline
-
-Implemented as a single modular script containing the following analytical sections:
-
-1. BAM preprocessing
-2. FASTQ extraction
-3. k-mer profiling using Jellyfish and GenomeScope
-4. De novo assembly using hifiasm
-5. GFA-to-FASTA conversion
-6. HiFi read alignment
-7. RagTag correction
-8. RagTag scaffolding
-9. Assembly quality assessment
-10. BUSCO completeness analysis
-11. Merqury consensus quality evaluation
-12. Repeat annotation using RepeatMasker and RepeatModeler
-13. Gene annotation transfer using Liftoff
-14. Structural variant detection using pbsv
-15. Small variant calling using Deepvariant
-
-Each module is internally documented and can be executed independently depending on the analysis stage.
+├── README.md
+│
+├── scripts/
+│   ├── 01_assembly_annotation.sh
+│   ├── 02_Ancestry.sh
+│   └── README.md
+│
+├── figures/
+│
+└── supplementary/
+```
 
 ---
 
-### 2. Variant, Population Structure, and Local Ancestry Pipeline
+## Main Software
 
-Implemented as a single modular script containing the following analytical sections:
-
-1. Variant filtering and preprocessing
-2. Reference panel construction and harmonization
-3. PLINK harmonization and quality control
-4. Principal component analysis (PCA)
-5. Global ancestry inference using ADMIXTURE
-6. Variant phasing using WhatsHap
-7. Chromosome-wise VCF splitting
-8. Preparation of RFMix reference and query files
-9. Local ancestry inference using RFMix
-10. Population structure visualization
-11. Local ancestry plotting
-
-Each section is internally documented and can be executed independently depending on the analysis stage.
-
-## Pipeline Description 
-
-
-### 1. Read Processing
-
-Input:
-
-* PacBio HiFi BAM files
-
-Steps:
-
-* BAM indexing (pbindex)
-* BAM to FASTQ conversion (bam2fastq)
-
-Output:
-
-* FASTQ files
-
----
-
-### 2. Genome Profiling
-
-Tools:
-
-* Jellyfish
-* GenomeScope
-
-Purpose:
-
-* Estimate genome size
-* Estimate heterozygosity
-* Estimate repeat content
-
-Output:
-
-* K-mer histograms
-* GenomeScope reports
-
----
-
-### 3. De Novo Genome Assembly
-
-Tool:
+### Genome Assembly
 
 * Hifiasm
-
-Input:
-
-* PacBio HiFi FASTQ files
-
-Output:
-
-* Primary contigs
-* Haplotype-resolved assemblies
-* GFA files
-
----
-
-### 4. Conversion of Assemblies
-
-Tool:
-
+* RagTag
 * Gfatools
 
-Purpose:
+### Assembly Quality Assessment
 
-* Convert GFA assemblies to FASTA format
+* QUAST
+* BUSCO
+* Merqury
 
-Output:
-
-* Contig FASTA files
-
----
-
-### 5. Assembly Refinement
-
-Tool:
-
-* RagTag
-
-Functions:
-
-* Structural correction
-* Reference-guided scaffolding
-
-References:
-
-* T2T-CHM13 v2.0
-* GRCh38
-
-Output:
-
-* Chromosome-scale scaffold assemblies
-
---
-
-### 6. Assembly Quality Assessment
-
-Tools:
-
-#### QUAST
-
-Evaluates:
-
-* N50
-* Assembly size
-* Misassemblies
-* Genome coverage
-
-#### BUSCO
-
-Evaluates:
-
-* Conserved ortholog completeness
-
-Database:
-
-* primates_odb12
-
-#### Merqury
-
-Evaluates:
-
-* Consensus quality value (QV)
-* Assembly completeness
-
----
-
-### 7. Repeat Annotation
-
-Tool:
+### Repeat and Gene Annotation
 
 * RepeatMasker
-
-Features:
-
-* LINEs
-* SINEs
-* LTR elements
-* DNA transposons
-* Simple repeats
-
-Output:
-
-* GFF annotations
-* Repeat statistics
-
----
-
-### 8. Gene Annotation
-
-Tool:
-
+* RepeatModeler2
 * Liftoff
 
-Reference Annotation:
-
-* T2T-CHM13 gene models
-
-Output:
-
-* GTF annotations
-* Lifted genes
-* Unmapped genes
-
----
-
-### 9. Structural Variant Discovery
-
-Tools:
-
-- pbsv
-- Sniffles2
-- NanoVar
-- cuteSV
-- SVIM-asm
-- Sawfish
-
-Workflow:
-
-1. Collect SV calls from individual callers.
-2. Convert compressed VCFs to standard VCF format.
-3. Generate SURVIVOR input files.
-4. Merge SV calls across callers.
-5. Retain variants supported by at least two methods.
-6. Filter final calls according to:
-
-
-## Output
-
-Merged SV VCFs:
-
-
-SVs_merge_4/
-
-
-Filtered consensus SV VCFs:
-
-
-SVs_merge_4/filtered/
-
-### 10. Small Variant Calling
-
-Tool:
+### Small Variant Discovery
 
 * DeepVariant
 * Dipcall
+* bcftools
 
+### Structural Variant Discovery
 
-Detected Variants:
+* pbsv
+* Sniffles2
+* NanoVar
+* cuteSV
+* SVIM-asm
+* Sawfish
+* SURVIVOR
 
-* SNPs
-* Indels
-* Filter indels<50pb
-  
-Output:
+### Population Genomics
 
-* VCF
+* PLINK
+* ADMIXTURE
+* WhatsHap
+* RFMix
 
-###  11. Global and Local Ancestry Inference
+### Genome Profiling
 
-The workflow integrates:
-
-- Whole-genome sequencing (WGS) variant data
-- A harmonized global reference panel (HGDP + 1000 Genomes)
-- Population structure analysis (PCA)
-- Global ancestry estimation (ADMIXTURE)
-- Local ancestry inference (RFMix)
-
-
-#### Input Data
-
-- Phased VCF files (biallelic SNPs, autosomes)
-- Reference panel: gnomAD HGDP + 1000 Genomes (v3)
-- Genetic maps 
-- Population labels:
-  - AFR
-  - AMR
-  - EUR
-  - EAS
-### Reference panel construction
-
-A balanced reference panel was initially generated from the HGDP + 1000 Genomes resource (gnomAD v3.1.2), selecting 300 unrelated high-quality individuals from each of five continental superpopulations: African (AFR), American (AMR), European (EUR), East Asian (EAS), and South Asian (SAS). Preliminary ancestry analyses indicated that the South Asian (SAS) component contributed negligibly to the Colombian genomes analyzed in this study. Therefore, downstream global and local ancestry analyses were performed using a four-superpopulation reference panel (AFR, AMR, EUR, and EAS), which better represented the ancestral composition of the study population.
-
-### Reference Panel Construction
-
-A balanced reference panel was constructed using 1,200 unrelated individuals from HGDP + 1000 Genomes:
-
-- AFR (n = 300)
-- AMR (n = 300)
-- EUR (n = 300)
-- EAS (n = 300)
-
-The AMR panel includes:
-
-#### 1000 Genomes populations
-
-- PEL
-- MXL
-- CLM
-- PUR
-
-#### Indigenous American populations (HGDP)
-
-- Maya
-- Pima
-- Karitiana
-- Suruí
-- Colombians
+* Jellyfish
+* GenomeScope 2.0
 
 ---
 
-### PLINK Processing for PCA and ADMIXTURE
+## Data Availability
 
-The filtered autosomal SNP datasets from the gnomAD HGDP+1KG reference panel and the  Colombian genomes were converted to PLINK format.
+Due to ethical, privacy, and consent restrictions associated with human whole-genome sequencing data, raw genomic datasets are not distributed through this GitHub repository.
 
-Variant IDs were harmonized, common SNPs were retained, and both datasets were merged.
+### Included
 
+* Bioinformatics workflows
+* Analysis scripts
+* Configuration files
+* Documentation
+* Summary results
+* Figures and supplementary resources
 
-Quality control was performed using:
+### Not Included
 
-- Genotype missingness filtering
-- MAF filtering
-- LD pruning
+* FASTQ files
+* BAM/CRAM files
+* Individual-level VCF files
+* Individual-level methylation files
+* Personally identifiable information
+* Clinical metadata
 
-#### Data Harmonization
+---
 
-- Intersection of SNPs between target genomes and reference panel
-- Strict allele matching
-- Chromosome-wise processing
+## Public Data Deposition
+
+### NCBI BioProject
+
+PRJNA1469122
+
+### Genome Assemblies
+
+| Sample | Assembly Accession |
+| ------ | ------------------ |
+| COLM   | JBYVEU000000000    |
+| COLF   | Pending release    |
 
 ---
 
-### LD Pruning
+## Citation
 
-Performed using PLINK:
+If you use this repository, please cite:
 
-
-plink --indep-pairwise 50 5 0.2
-
-
-### Principal Component Analysis (PCA)
-
-Performed on the LD-pruned dataset.
-
-Main analyses:
-
-- Population structure visualization
-- First 20 PCs retained
+> Bolaños I., Tobar-Tosse F., et al. High-quality diploid chromosome-scale assemblies from admixed Colombian individuals reveal non-uniform structural variation and local ancestry patterns. Submitted manuscript.
 
 ---
-### Local Ancestry Inference in Colombian T2T Genomes
 
-## Overview
+## License
 
-The pipeline integrates:
+This project is distributed under the MIT License.
 
-- Variant calling and filtering from PacBio HiFi data
-- Phasing of autosomal SNPs
-- Harmonization with HGDP + 1000 Genomes reference panels
-- Local ancestry inference using RFMix
-- Genome-wide ancestry assignment across autosomes
-- Generation of ancestry tracks and summary statistics
+---
 
-## Data Sources
+## Contact
 
-- HGDP + 1000 Genomes phased haplotypes
-- T2T human genome assemblies
-- PacBio HiFi sequencing data
-- GRCh38 and T2T-CHM13 references
+**Ivon Bolaños**
 
-## Main Tools
+PhD Candidate in Biomedical Sciences
+Universidad del Valle
+Cali, Colombia
 
-- DeepVariant
-- bcftools
-- WhatsHap
-- RFMix
-- Python
-- R
-
-## Output
-
-The workflow generates:
-
-- Local ancestry assignments
-- Chromosome-level ancestry maps
-- Genome-wide ancestry summaries
-- Visualization files 
-
-- 
-##  References – Genome Assembly
-
-Cheng, H., Concepcion, G. T., Feng, X., Zhang, H., & Li, H. (2021).  
-Haplotype-resolved de novo assembly using phased assembly graphs with hifiasm.  
-Nature Methods, 18(2), 170–175.  
-https://doi.org/10.1038/s41592-020-01056-5  
-
-Nurk, S., Koren, S., Rhie, A., Rautiainen, M., Bzikadze, A. V., Mikheenko, A.,  
-Vollger, M. R., Altemose, N., Uralsky, L., Gershman, A., Aganezov, S.,  
-Hoyt, S. J., Diekhans, M., Logsdon, G. A., Alonge, M., Antonarakis, S. E.,  
-Borchers, M., Bouffard, G. G., Brooks, S. Y., … Phillippy, A. M. (2022).  
-The complete sequence of a human genome.  
-Science, 376(6588), 44–53.  
-https://doi.org/10.1126/science.abj6987  
-
-Li, H. (2018).  
-Minimap2: Pairwise alignment for nucleotide sequences.  
-Bioinformatics, 34(18), 3094–3100.  
-https://doi.org/10.1093/bioinformatics/bty191  
-
-Rhie, A., Walenz, B. P., Koren, S., & Phillippy, A. M. (2020).  
-Merqury: Reference-free quality, completeness, and phasing assessment for genome assemblies.  
-Genome Biology, 21, 245.  
-https://doi.org/10.1186/s13059-020-02134-9  
-
-Gurevich, A., Saveliev, V., Vyahhi, N., & Tesler, G. (2013).  
-QUAST: Quality assessment tool for genome assemblies.  
-Bioinformatics, 29(8), 1072–1075.  
-https://doi.org/10.1093/bioinformatics/btt086  
-
-Simão, F. A., Waterhouse, R. M., Ioannidis, P., Kriventseva, E. V., & Zdobnov, E. M. (2015).  
-BUSCO: Assessing genome assembly and annotation completeness with single-copy orthologs.  
-Bioinformatics, 31(19), 3210–3212.  
-https://doi.org/10.1093/bioinformatics/btv351  
-
-##  References – Genome Profiling
-
-Marçais, G., & Kingsford, C. (2011).  
-A fast, lock-free approach for efficient parallel counting of occurrences of k-mers.  
-Bioinformatics, 27(6), 764–770.  
-https://doi.org/10.1093/bioinformatics/btr011  
-
-Vurture, G. W., Sedlazeck, F. J., Nattestad, M., Underwood, C. J., Fang, H.,  
-Gurtowski, J., & Schatz, M. C. (2017).  
-GenomeScope: Fast reference-free genome profiling from short reads.  
-Bioinformatics, 33(14), 2202–2204.  
-https://doi.org/10.1093/bioinformatics/btx153  
-
-Ranallo-Benavidez, T. R., Jaron, K. S., & Schatz, M. C. (2020).  
-GenomeScope 2.0 and Smudgeplot for reference-free profiling of polyploid genomes.  
-Nature Communications, 11, 1432.  
-https://doi.org/10.1038/s41467-020-14998-3  
-
-
-##  References – Genome Annotation
-
-Shumate, A., & Salzberg, S. L. (2021).  
-Liftoff: Accurate mapping of gene annotations.  
-Bioinformatics, 37(12), 1639–1643.  
-https://doi.org/10.1093/bioinformatics/btaa1016  
-
-Flynn, J. M., Hubley, R., Goubert, C., Rosen, J., Clark, A. G., Feschotte, C., & Smit, A. F. A. (2020).  
-RepeatModeler2 for automated genomic discovery of transposable element families.  
-Proceedings of the National Academy of Sciences, 117(17), 9451–9457.  
-https://doi.org/10.1073/pnas.1921046117  
-
-Smit, A. F. A., Hubley, R., & Green, P. (2013–2015).  
-RepeatMasker Open-4.0.  
-http://www.repeatmasker.org  
-## References -Global and local Ancestry Inference
-
-The 1000 Genomes Project Consortium. (2015).
-A global reference for human genetic variation. Nature, 526(7571), 68–74.
-https://doi.org/10.1038/nature15393
-
-Maples, B. K., Gravel, S., Kenny, E. E., & Bustamante, C. D. (2013).
-RFMix: A discriminative modeling approach for rapid and robust local-ancestry inference. American Journal of Human Genetics, 93(2), 278–288.https://doi.org/10.1016/j.ajhg.2013.06.020
-
-Alexander, D. H., Novembre, J., & Lange, K. (2009).
-Fast model-based estimation of ancestry in unrelated individuals. Genome Research, 19(9), 1655–1664. https://doi.org/10.1101/gr.094052.109
-
-Shriver, M. D., Smith, M. W., Jin, L., Marcini, A., Akey, J. M., Deka, R., & Ferrell, R. E. (1997).
-Ethnic-affiliation estimation by use of population-specific DNA markers. American Journal of Human Genetics, 60(4), 957–964.
-
-Rosenberg, N. A., Pritchard, J. K., Weber, J. L., Cann, H. M., Kidd, K. K., Zhivotovsky, L. A., & Feldman, M. W. (2003).
-Genetic structure of human populations. Science, 298(5602), 2381–2385. https://doi.org/10.1126/science.1078311
-
-Kosoy, R., Nassir, R., Tian, C., White, P. A., Butler, L. M., Silva, G., Kittles, R., Alarcon-Riquelme, M. E., Gregersen, P. K., Belmont, J. W., & Seldin, M. F. (2009). Ancestry informative marker sets for determining continental origin and admixture proportions in common populations in America. Human Mutation, 30(1), 69–78. https://doi.org/10.1002/humu.20822
-
-Phillips, C. (2014). Forensic genetic analysis of bio-geographical ancestry. Forensic Science International: Genetics, 12, 49–65.
-https://doi.org/10.1016/j.fsigen.2014.05.012
+ORCID: https://orcid.org/0000-0002-8007-8929
 
