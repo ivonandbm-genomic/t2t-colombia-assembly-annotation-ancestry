@@ -1,0 +1,72 @@
+# MacOS
+.DS_Store
+
+# Linux
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Conda
+.env
+.conda
+conda-meta/
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Bioinformatics outputs
+
+*.bam
+*.bai
+*.cram
+*.crai
+
+*.fastq
+*.fastq.gz
+
+*.fq
+*.fq.gz
+
+*.vcf
+*.vcf.gz
+*.bcf
+*.csi
+*.tbi
+
+*.sam
+
+# Assembly outputs
+*.gfa
+
+# Large genomic outputs
+results/
+outputs/
+intermediate/
+
+# Merqury
+meryl/
+*.meryl
+
+# RepeatMasker
+*.out
+*.tbl
+
+# QUAST
+quast_results/
+
+# BUSCO
+busco_results/
+
+# R
+.Rhistory
+.RData
