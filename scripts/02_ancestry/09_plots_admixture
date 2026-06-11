@@ -1,0 +1,500 @@
+#PLOT ADMIXTURE#
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import sys
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# =========================
+# CONFIG
+# =========================
+BASE_DIR = "/home/rare/ivon/data/vcf_filtrados/newfil/bialelicos/18genomes/plink_individual"
+OUT_DIR  = "/home/rare/ivon/figpaper"
+PREFIX   = "merged_18_1200_common_qc05_maf05_nomind_pruned"
+MAP_FILE = "/mnt/diskrare/ivonb/refamerindios/superpop_4groups.map"
+
+K_MIN = 1
+K_MAX = 6
+K_MAIN = 4  # Main barplot + pie charts
+
+# Equal-width blocks
+BLOCKS_ORDER = ["AFR", "EUR", "EAS", "AMR", "COLM", "COLF"]
+BLOCK_WIDTH        = 200
+GAP_BETWEEN_BLOCKS = 60
+
+# Project blocks
+KEEP_COLM = {"017"}
+KEEP_COLF = {"018"}
+
+# If manual component labels are desired (length must equal K_MAIN), uncomment:
+# COMP_LABELS_K4 = ["EUR", "AMR", "EAS", "AFR"]
+COMP_LABELS_K4 = None  # If None, labels will be inferred from AFR/EUR/EAS/AMR blocks
+
+os.makedirs(OUT_DIR, exist_ok=True)
+
+# =========================
+# HELPERS
+# =========================
+def check_file(path: str):
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        raise FileNotFoundError(f"Missing or empty file: {path}")
+
+def load_fam(path: str) -> pd.DataFrame:
+    fam = pd.read_csv(
+        path, sep=r"\s+", header=None,
+        names=["FID","IID","PID","MID","SEX","PHENO"]
+    )
+    return fam[["FID","IID"]].copy()
+
+def load_map(path: str) -> pd.DataFrame:
+    m = pd.read_csv(path, sep=r"\s+", header=None, names=["IID","SUPERPOP"])
+    m["SUPERPOP"] = m["SUPERPOP"].astype(str).str.strip()
+    return m
+
+def load_Q(path: str) -> np.ndarray:
+    Q = np.loadtxt(path)
+    if Q.ndim == 1:
+        Q = Q.reshape(-1, 1)
+    return Q
+
+def is_project(iid: str) -> bool:
+    return str(iid).startswith("PB000696_")
+
+def short_id(iid: str) -> str:
+    # PB000696_017C_... -> 017
+    try:
+        return str(iid).split("_")[1][:3]
+    except Exception:
+        return str(iid)
+
+def build_df_and_layout(fam: pd.DataFrame, pop: pd.DataFrame):
+
+    """
+    Build dataframe with IID, SHORT, GROUP and block layout:
+    - x_positions (left border)
+    - widths per row (equal-width blocks)
+    - block_centers, block_ranges, used_blocks
+    """
+
+    df = fam.merge(pop, on="IID", how="left")
+    df["SHORT"] = df["IID"].apply(short_id)
+
+    # GROUP: default SUPERPOP; if project sample and SHORT matches -> COLM/COLF
+    df["GROUP"] = df["SUPERPOP"]
+    df.loc[df["IID"].apply(is_project) & df["SHORT"].isin(KEEP_COLM), "GROUP"] = "COLM"
+    df.loc[df["IID"].apply(is_project) & df["SHORT"].isin(KEEP_COLF), "GROUP"] = "COLF"
+
+    # Filtering
+    df = df[df["GROUP"].notna()].copy()
+    df = df[df["GROUP"] != "UNK"].copy()
+    df = df[df["GROUP"].isin(BLOCKS_ORDER)].copy()
+
+    # Sort by blocks; within each block sort by SHORT
+    df["BLOCK_ORDER"] = pd.Categorical(df["GROUP"], categories=BLOCKS_ORDER, ordered=True)
+    df.sort_values(["BLOCK_ORDER", "SHORT"], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+
+    # Count samples per block
+    sample_counts = {b: int((df["GROUP"] == b).sum()) for b in BLOCKS_ORDER}
+    sample_counts = {b: n for b, n in sample_counts.items() if n > 0}
+
+    # Width per block
+    bar_widths_block = {b: (BLOCK_WIDTH / sample_counts[b]) for b in sample_counts}
+
+    # x positions
+    x_positions = np.zeros(len(df), dtype=float)
+    block_centers = []
+    block_ranges = []
+    used_blocks = []
+
+    current_x = 0.0
+    idx = 0
+
+    for b in BLOCKS_ORDER:
+        n = sample_counts.get(b, 0)
+
+        if n == 0:
+            continue
+
+        if used_blocks:
+            current_x += GAP_BETWEEN_BLOCKS
+
+        start = current_x
+        w = bar_widths_block[b]
+
+        x_positions[idx:idx+n] = start + np.arange(n) * w
+        end = start + BLOCK_WIDTH
+
+        block_centers.append(start + BLOCK_WIDTH / 2)
+        block_ranges.append((start, end))
+        used_blocks.append(b)
+
+        current_x = end
+        idx += n
+
+    widths = np.array([bar_widths_block[g] for g in df["GROUP"].tolist()], dtype=float)
+
+    return df, x_positions, widths, block_centers, block_ranges, used_blocks
+
+def align_Q_to_df(Q: np.ndarray, fam: pd.DataFrame, df: pd.DataFrame) -> np.ndarray:
+    fam_pos = {iid: i for i, iid in enumerate(fam["IID"].astype(str).tolist())}
+    rows = np.array([fam_pos[str(iid)] for iid in df["IID"].astype(str).tolist()], dtype=int)
+    Qk = Q[rows, :].astype(float)
+    Qk = Qk / np.clip(Qk.sum(axis=1, keepdims=True), 1e-12, None)
+    return Qk
+
+def add_block_labels_and_separators(ax, block_centers, block_ranges, used_blocks):
+
+    # Labels
+    for c, lab in zip(block_centers, used_blocks):
+        ax.text(
+            c, 1.02, lab,
+            ha="center", va="bottom",
+            transform=ax.get_xaxis_transform(),
+            fontsize=11, fontweight="bold"
+        )
+
+    # Separators
+    for j in range(1, len(block_ranges)):
+        sep_pos = block_ranges[j-1][1] + (GAP_BETWEEN_BLOCKS / 2)
+        ax.axvline(sep_pos, color="gray", linestyle="--", linewidth=1)
+
+def infer_component_labels_from_blocks(df: pd.DataFrame, Qk: np.ndarray, ref_blocks=("AFR","EUR","EAS","AMR")):
+
+    """
+    Infer ancestry component labels from reference blocks.
+    """
+
+    K = Qk.shape[1]
+    block_means = {}
+
+    for b in ref_blocks:
+        idx = df.index[df["GROUP"] == b].to_list()
+
+        if len(idx) == 0:
+            continue
+
+        block_means[b] = Qk[idx, :].mean(axis=0)
+
+    if len(block_means) < 2:
+        return [f"C{j+1}" for j in range(K)]
+
+    labels = [None] * K
+    used = set()
+
+    clarity = []
+
+    for j in range(K):
+        scores = [(b, block_means[b][j]) for b in block_means]
+        scores.sort(key=lambda x: x[1], reverse=True)
+
+        top1 = scores[0][1]
+        top2 = scores[1][1] if len(scores) > 1 else 0.0
+
+        clarity.append((j, top1 - top2, scores))
+
+    clarity.sort(key=lambda x: x[1], reverse=True)
+
+    for j, _, scores in clarity:
+
+        chosen = None
+
+        for b, _v in scores:
+            if b not in used:
+                chosen = b
+                break
+
+        if chosen is None:
+            chosen = scores[0][0]
+
+        labels[j] = chosen
+        used.add(chosen)
+
+    if K > len(ref_blocks):
+
+        counts = {}
+
+        for lab in labels:
+            counts[lab] = counts.get(lab, 0) + 1
+
+        seen = {}
+        new_labels = []
+
+        for lab in labels:
+
+            if counts.get(lab, 0) > 1:
+                seen[lab] = seen.get(lab, 0) + 1
+                new_labels.append(f"{lab}{seen[lab]}")
+            else:
+                new_labels.append(lab)
+
+        labels = new_labels
+
+    return labels
+
+def get_component_colors(K: int):
+
+    """
+    Consistent color palette for barplots and pie charts.
+    """
+
+    cmap = plt.get_cmap("tab10") if K <= 10 else plt.get_cmap("tab20")
+    return [cmap(i) for i in range(K)]
+
+# =========================
+# FIGURES
+# =========================
+def plot_multipanel_Ks(df, x_positions, widths, fam, block_centers, block_ranges, used_blocks, out_png, K_min, K_max):
+
+    nrows = K_max - K_min + 1
+
+    fig, axes = plt.subplots(
+        nrows=nrows, ncols=1,
+        figsize=(24, 2.4 * nrows),
+        sharex=True
+    )
+
+    if nrows == 1:
+        axes = [axes]
+
+    for i, K in enumerate(range(K_min, K_max + 1)):
+
+        q_path = os.path.join(BASE_DIR, f"{PREFIX}.{K}.Q")
+        check_file(q_path)
+
+        Q = load_Q(q_path)
+        Qk = align_Q_to_df(Q, fam, df)
+
+        colors = get_component_colors(Qk.shape[1])
+
+        ax = axes[i]
+
+        bottom = np.zeros(Qk.shape[0], dtype=float)
+
+        for kcol in range(Qk.shape[1]):
+
+            ax.bar(
+                x_positions, Qk[:, kcol],
+                bottom=bottom,
+                width=widths,
+                align="edge",
+                linewidth=0,
+                color=colors[kcol]
+            )
+
+            bottom += Qk[:, kcol]
+
+        ax.set_ylim(0, 1)
+        ax.set_ylabel(f"K={K}", rotation=0, labelpad=30, va="center")
+        ax.set_yticks([0, 0.5, 1.0])
+
+        add_block_labels_and_separators(ax, block_centers, block_ranges, used_blocks)
+
+        ax.set_xticks([])
+
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=400, bbox_inches="tight")
+    plt.close()
+
+    print("Saved:", out_png)
+
+def plot_barplot_oneK_K4(df, x_positions, widths, Qk, K, out_png, out_pdf, block_centers, block_ranges, used_blocks, comp_labels):
+
+    """
+    Main K=4 barplot.
+    """
+
+    fig, ax = plt.subplots(figsize=(24, 3.2))
+
+    colors = get_component_colors(Qk.shape[1])
+
+    bottom = np.zeros(Qk.shape[0], dtype=float)
+
+    for kcol in range(Qk.shape[1]):
+
+        ax.bar(
+            x_positions, Qk[:, kcol],
+            bottom=bottom,
+            width=widths,
+            align="edge",
+            linewidth=0,
+            color=colors[kcol]
+        )
+
+        bottom += Qk[:, kcol]
+
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("Ancestry proportion")
+    ax.set_yticks([0, 0.5, 1.0])
+    ax.set_xticks([])
+
+    add_block_labels_and_separators(ax, block_centers, block_ranges, used_blocks)
+
+    if comp_labels is not None and len(comp_labels) == Qk.shape[1]:
+
+        handles = [plt.Rectangle((0, 0), 1, 1, color=colors[i]) for i in range(Qk.shape[1])]
+
+        ax.legend(
+            handles, comp_labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.18),
+            ncol=min(6, len(comp_labels)),
+            frameon=False
+        )
+
+    plt.tight_layout()
+
+    plt.savefig(out_png, dpi=400, bbox_inches="tight")
+    plt.savefig(out_pdf, bbox_inches="tight")
+
+    plt.close()
+
+    print("Saved:", out_png)
+    print("Saved:", out_pdf)
+
+def plot_pies_K4_017_018(df, Qk, K, out_png, comp_labels):
+
+    """
+    Pie charts for samples 017 (COLM) and 018 (COLF).
+    """
+
+    df_colm = df[df["GROUP"] == "COLM"]
+    df_colf = df[df["GROUP"] == "COLF"]
+
+    if df_colm.shape[0] == 0 or df_colf.shape[0] == 0:
+        print("COLM and/or COLF samples were not found.")
+        return
+
+    i_colm = int(df_colm.index[0])
+    i_colf = int(df_colf.index[0])
+
+    if comp_labels is None or len(comp_labels) != Qk.shape[1]:
+        comp_labels = [f"C{j+1}" for j in range(Qk.shape[1])]
+
+    colors = get_component_colors(Qk.shape[1])
+
+    def autopct_fmt(pct):
+        return f"{pct:.1f}%" if pct >= 1 else ""
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.6))
+
+    wedges0, _texts0, _auto0 = axes[0].pie(
+        Qk[i_colm, :],
+        startangle=90,
+        counterclock=False,
+        colors=colors,
+        autopct=autopct_fmt,
+        textprops={"fontsize": 9},
+        wedgeprops={"linewidth": 0.6, "edgecolor": "white"}
+    )
+
+    axes[0].set_title("017 (COLM)")
+    axes[0].set_aspect("equal")
+
+    wedges1, _texts1, _auto1 = axes[1].pie(
+        Qk[i_colf, :],
+        startangle=90,
+        counterclock=False,
+        colors=colors,
+        autopct=autopct_fmt,
+        textprops={"fontsize": 9},
+        wedgeprops={"linewidth": 0.6, "edgecolor": "white"}
+    )
+
+    axes[1].set_title("018 (COLF)")
+    axes[1].set_aspect("equal")
+
+    fig.legend(
+        wedges0, comp_labels,
+        loc="lower center",
+        ncol=min(6, len(comp_labels)),
+        frameon=False,
+        bbox_to_anchor=(0.5, -0.02)
+    )
+
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=400, bbox_inches="tight")
+
+    plt.close()
+
+    print("Saved:", out_png)
+
+# =========================
+# MAIN
+# =========================
+def main():
+
+    os.chdir(BASE_DIR)
+
+    fam_path = os.path.join(BASE_DIR, f"{PREFIX}.fam")
+
+    check_file(fam_path)
+    check_file(MAP_FILE)
+
+    fam = load_fam(fam_path)
+    pop = load_map(MAP_FILE)
+
+    df, x_positions, widths, block_centers, block_ranges, used_blocks = build_df_and_layout(fam, pop)
+
+    # ---------- 1) Multipanel K=1..6 ----------
+    out_multi = os.path.join(OUT_DIR, f"{PREFIX}.K{K_MIN}-K{K_MAX}.equalblocks_COLM_COLF.png")
+
+    plot_multipanel_Ks(
+        df, x_positions, widths, fam,
+        block_centers, block_ranges, used_blocks,
+        out_multi, K_MIN, K_MAX
+    )
+
+    # ---------- 2) Main K=4 barplot ----------
+    q_main = os.path.join(BASE_DIR, f"{PREFIX}.{K_MAIN}.Q")
+
+    check_file(q_main)
+
+    Q = load_Q(q_main)
+    Qk_main = align_Q_to_df(Q, fam, df)
+
+    if COMP_LABELS_K4 is not None:
+
+        if len(COMP_LABELS_K4) != Qk_main.shape[1]:
+            sys.exit(f"COMP_LABELS_K4 length is {len(COMP_LABELS_K4)} but K={Qk_main.shape[1]}")
+
+        comp_labels = COMP_LABELS_K4
+
+    else:
+        comp_labels = infer_component_labels_from_blocks(
+            df, Qk_main,
+            ref_blocks=("AFR","EUR","EAS","AMR")
+        )
+
+    out_k4_png = os.path.join(OUT_DIR, f"{PREFIX}.K{K_MAIN}.barplot_equalblocks_COLM_COLF.png")
+    out_k4_pdf = os.path.join(OUT_DIR, f"{PREFIX}.K{K_MAIN}.barplot_equalblocks_COLM_COLF.pdf")
+
+    plot_barplot_oneK_K4(
+        df, x_positions, widths, Qk_main, K_MAIN,
+        out_k4_png, out_k4_pdf,
+        block_centers, block_ranges, used_blocks,
+        comp_labels=comp_labels
+    )
+
+    # ---------- 3) K=4 pie charts ----------
+    out_pies = os.path.join(OUT_DIR, f"{PREFIX}.K{K_MAIN}.pies_017_COLM_018_COLF.png")
+
+    plot_pies_K4_017_018(
+        df,
+        Qk_main,
+        K_MAIN,
+        out_pies,
+        comp_labels=comp_labels
+    )
+
+    print("\nAnalysis completed. Review output files in:", OUT_DIR)
+    print("   - K1..K6 multipanel plot")
+    print("   - K4 barplot")
+    print("   - K4 pie charts")
+
+if __name__ == "__main__":
+    main()
