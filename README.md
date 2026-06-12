@@ -237,7 +237,8 @@ PRJNA1469122
 
 If you use this repository, please cite:
 
-> Bolaños I., Tobar-Tosse F., et al. High-quality diploid chromosome-scale assemblies from admixed Colombian individuals reveal non-uniform structural variation and local ancestry patterns. Submitted manuscript.
+> Bolaños-Martínez, I. A., Tobar Tosse, F., Mosquera, A. J., Londoño-Velasco, E., Ortega, G., Lores, J., Losada-Casallas, K., Vélez, P. E., & Moreno, P. A. (2026). *High-quality diploid chromosome-scale assemblies from admixed Colombian individuals reveal non-uniform structural variation and local ancestry patterns* [Manuscript submitted for publication]. *BMC Biology*.
+
 
 ---
 
